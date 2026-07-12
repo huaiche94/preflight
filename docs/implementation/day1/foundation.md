@@ -571,3 +571,81 @@ assumptions:
     indexed."
 blockers: []
 ```
+
+### foundation-08: cross-package path/config precedence tests
+
+Scope per `EXECUTION_DAG.md`'s foundation-08 row and the task instruction:
+strengthen precedence test coverage across `internal/paths` and
+`internal/config` TOGETHER, not just each package's own existing
+in-isolation precedence tests (`paths_test.go`'s XDG/env-var-override
+table already covers `paths`' own precedence; `config_test.go`'s
+`TestLoad_Precedence_*` and `TestLoad_EndToEnd_FileBackedPrecedenceChain`
+already cover `config`'s own six-layer precedence chain given
+already-resolved bytes). Neither existing suite exercised the realistic
+pipeline a future `runtime` config command actually runs: use
+`paths.Resolve` (env-var-driven) to find WHERE the global config file
+lives, then feed whatever is actually at that resolved location into
+`config.Load`'s own precedence chain alongside other layers — i.e. paths'
+"which env var wins for WHERE" axis and config's "which layer wins for
+WHICH BYTES" axis composed together, not just proven correct in isolation.
+
+```yaml
+node: foundation-08
+status: completed
+artifacts:
+  - internal/config/precedence_paths_test.go (new — 3 tests: an
+    XDG_CONFIG_HOME override changing which file is actually loaded
+    end-to-end through paths.Resolve -> config.LoadFile -> config.Load;
+    a paths-resolved global layer still losing to higher-precedence
+    config layers (repo_config, environment) exactly as config's own
+    precedence rules require, now proven against a real resolved file
+    path rather than a hand-built []byte; an unrelated paths env var
+    (XDG_RUNTIME_DIR) proven NOT to perturb config's precedence result,
+    i.e. the two packages' env-driven axes are independent, not
+    accidentally coupled through shared process environment state)
+validation:
+  - "go test ./internal/paths/... ./internal/config/... -run Precedence ->
+    PASS (internal/paths reports \"no tests to run\" under this filter,
+    which is correct and expected — paths' own precedence-flavored tests
+    are named TestResolve_*_XDGOverrides, not *Precedence*; the filter's
+    purpose per the DAG is to select the NEW cross-package tests, which
+    live in internal/config and do match)"
+  - "go test ./internal/paths/... ./internal/config/... -race -> PASS, all
+    tests including pre-existing ones"
+  - "go build ./... -> clean"
+  - "go vet ./... -> clean"
+  - "golangci-lint run ./... (whole repo) -> 0 issues"
+commit: <recorded after commit, see below>
+next_action: none — this was the last node assigned this wave (per task
+  instruction: STOP immediately once both nodes are Validated; foundation-07
+  is explicitly out of scope, a Wave 4 decision)
+assumptions:
+  - "internal/paths' own fakeEnv (fake_env_test.go) is unexported to
+    package paths_test and cannot be reused from internal/config's test
+    package across the package boundary; a small local pathsFakeEnv
+    satisfying the exported paths.Env interface was defined instead
+    inside precedence_paths_test.go rather than exporting paths' fake or
+    promoting it to a shared testutil package — the latter would be a
+    new abstraction/package this wave's scope does not call for
+    (Constitution §7 rule 10), and duplicating ~10 lines of trivial fake
+    is cheaper than either alternative."
+  - "The new test file lives under internal/config/ (one of foundation's
+    exclusive paths) rather than internal/paths/, since a cross-package
+    integration test conceptually belongs with the consumer (a future
+    config-loading caller uses paths' output, not the reverse) — both
+    directories are foundation-owned either way, so this is a
+    non-binding placement choice, not a contract decision."
+  - "config.Load requires schema_version to be present in the MERGED
+    result from any layer (config.go: `merged[\"schema_version\"]`
+    checked after all layers are combined, not per-layer) — this is
+    pre-existing config.go behavior from foundation-03, not something
+    foundation-08 changed. One new test initially wrote only an
+    override-value global-config fixture (no schema_version key, matching
+    how a real global config file plausibly would look if defaults
+    supplies the envelope) without including a defaults layer at all,
+    which correctly failed with ErrInvalidSchemaVersion — fixed by adding
+    an explicit defaults layer carrying just schema_version, matching how
+    config_test.go's own existing tests already establish the envelope
+    normally arrives (defaults layer), not a config.go bug."
+blockers: []
+```
