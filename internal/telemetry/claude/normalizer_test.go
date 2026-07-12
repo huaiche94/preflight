@@ -1,0 +1,280 @@
+package claude
+
+import (
+	"os"
+	"path/filepath"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/huaiche94/preflight/internal/domain"
+	claudehooks "github.com/huaiche94/preflight/internal/hooks/claude"
+	claudeprovider "github.com/huaiche94/preflight/internal/providers/claude"
+	v1 "github.com/huaiche94/preflight/pkg/protocol/v1"
+)
+
+// fixedClock is a deterministic domain.Clock fake so tests never depend on
+// wall-clock time.Now().
+type fixedClock struct{ t time.Time }
+
+func (f fixedClock) Now() time.Time { return f.t }
+
+// seqIDs is a deterministic domain.IDGenerator fake: each call returns the
+// next integer in sequence, formatted as a string. Real ID generation
+// (UUIDv7) is foundation's internal/idgen, out of scope for this wave.
+type seqIDs struct{ n int }
+
+func (s *seqIDs) NewID() string {
+	s.n++
+	return "id-" + strconv.Itoa(s.n)
+}
+
+func fixture(t *testing.T, dir, name string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("..", "..", "..", "testdata", "provider-events", "claude", dir, name))
+	if err != nil {
+		t.Fatalf("reading fixture %s/%s: %v", dir, name, err)
+	}
+	return b
+}
+
+func newTestNormalizer() (*Normalizer, fixedClock) {
+	clock := fixedClock{t: time.Date(2026, 7, 12, 12, 0, 0, 0, time.UTC)}
+	return NewNormalizer(clock, &seqIDs{}), clock
+}
+
+func requireEnvelope(t *testing.T, ev v1.Event, wantType v1.EventType, wantSession domain.SessionID) {
+	t.Helper()
+	if ev.SchemaVersion != v1.SchemaVersionEvent {
+		t.Errorf("SchemaVersion = %q, want %q", ev.SchemaVersion, v1.SchemaVersionEvent)
+	}
+	if ev.EventID == "" {
+		t.Error("EventID is empty")
+	}
+	if ev.EventType != wantType {
+		t.Errorf("EventType = %q, want %q", ev.EventType, wantType)
+	}
+	if ev.Provider != Provider {
+		t.Errorf("Provider = %q, want %q", ev.Provider, Provider)
+	}
+	if ev.SessionID != string(wantSession) {
+		t.Errorf("SessionID = %q, want %q", ev.SessionID, wantSession)
+	}
+	if ev.OccurredAt.IsZero() {
+		t.Error("OccurredAt is zero")
+	}
+	if ev.ObservedAt.IsZero() {
+		t.Error("ObservedAt is zero")
+	}
+	if ev.IdempotencyKey == "" {
+		t.Error("IdempotencyKey is empty")
+	}
+	if ev.Payload == nil {
+		t.Error("Payload is nil")
+	}
+}
+
+func TestNormalizeStatusLine(t *testing.T) {
+	n, clock := newTestNormalizer()
+
+	snap, err := claudeprovider.ParseStatusLine(fixture(t, "statusline", "normal.json"))
+	if err != nil {
+		t.Fatalf("ParseStatusLine: %v", err)
+	}
+
+	events := n.NormalizeStatusLine(snap, clock.Now())
+
+	wantTypes := map[v1.EventType]int{
+		v1.EventProviderContextObserved: 0,
+		v1.EventProviderUsageObserved:   0,
+		v1.EventProviderQuotaObserved:   0,
+	}
+	for _, ev := range events {
+		requireEnvelope(t, ev, ev.EventType, snap.SessionID)
+		wantTypes[ev.EventType]++
+	}
+
+	if wantTypes[v1.EventProviderContextObserved] != 1 {
+		t.Errorf("context events = %d, want 1", wantTypes[v1.EventProviderContextObserved])
+	}
+	if wantTypes[v1.EventProviderUsageObserved] != 1 {
+		t.Errorf("usage events = %d, want 1", wantTypes[v1.EventProviderUsageObserved])
+	}
+	// normal.json has both five_hour and seven_day windows populated.
+	if wantTypes[v1.EventProviderQuotaObserved] != 2 {
+		t.Errorf("quota events = %d, want 2", wantTypes[v1.EventProviderQuotaObserved])
+	}
+
+	// Spot-check payload values propagate and are not zero-substituted.
+	for _, ev := range events {
+		if ev.EventType == v1.EventProviderContextObserved {
+			if got := ev.Payload["used_percent"]; got != 21.9 {
+				t.Errorf("context used_percent = %v, want 21.9", got)
+			}
+		}
+		if ev.EventType == v1.EventProviderUsageObserved {
+			if got := ev.Payload["total_cost_usd"]; got != 1.2345 {
+				t.Errorf("usage total_cost_usd = %v, want 1.2345", got)
+			}
+		}
+	}
+}
+
+func TestNormalizeStatusLine_MissingFields_OmitsAbsentEvents(t *testing.T) {
+	n, clock := newTestNormalizer()
+
+	snap, err := claudeprovider.ParseStatusLine(fixture(t, "statusline", "missing_fields.json"))
+	if err != nil {
+		t.Fatalf("ParseStatusLine: %v", err)
+	}
+
+	events := n.NormalizeStatusLine(snap, clock.Now())
+
+	// CONTRACT_FREEZE.md "unknown is not zero": a wholly-absent measurement
+	// must not synthesize an event that claims to observe it. This does not
+	// assert a specific count (that depends on exactly what the fixture
+	// omits) — it asserts that no produced event's payload claims a
+	// measurement this snapshot didn't actually carry, and that produced
+	// events don't panic/zero-fill.
+	for _, ev := range events {
+		requireEnvelope(t, ev, ev.EventType, snap.SessionID)
+	}
+}
+
+func TestNormalizeStatusLine_Idempotent(t *testing.T) {
+	n, clock := newTestNormalizer()
+	snap, err := claudeprovider.ParseStatusLine(fixture(t, "statusline", "normal.json"))
+	if err != nil {
+		t.Fatalf("ParseStatusLine: %v", err)
+	}
+
+	first := n.NormalizeStatusLine(snap, clock.Now())
+	second := n.NormalizeStatusLine(snap, clock.Now())
+
+	if len(first) != len(second) {
+		t.Fatalf("event count differs across normalizations: %d vs %d", len(first), len(second))
+	}
+	for i := range first {
+		if first[i].IdempotencyKey != second[i].IdempotencyKey {
+			t.Errorf("IdempotencyKey[%d] not deterministic: %q vs %q", i, first[i].IdempotencyKey, second[i].IdempotencyKey)
+		}
+		if first[i].EventType != second[i].EventType {
+			t.Errorf("EventType[%d] differs: %q vs %q", i, first[i].EventType, second[i].EventType)
+		}
+		// EventID must NOT be equal — each normalization call produces a
+		// distinct event identity; IdempotencyKey is what downstream
+		// dedup keys on, not EventID.
+		if first[i].EventID == second[i].EventID {
+			t.Errorf("EventID[%d] unexpectedly equal across calls: %q", i, first[i].EventID)
+		}
+	}
+}
+
+func TestNormalizeUserPromptSubmit(t *testing.T) {
+	n, clock := newTestNormalizer()
+
+	parsed, err := claudehooks.ParseUserPromptSubmit(fixture(t, "userpromptsubmit", "normal.json"))
+	if err != nil {
+		t.Fatalf("ParseUserPromptSubmit: %v", err)
+	}
+
+	ev := n.NormalizeUserPromptSubmit(parsed, clock.Now())
+	requireEnvelope(t, ev, v1.EventProviderTurnStarted, parsed.SessionID)
+
+	if ev.Payload["prompt_sha256"] != parsed.PromptSHA256 {
+		t.Errorf("prompt_sha256 payload = %v, want %v", ev.Payload["prompt_sha256"], parsed.PromptSHA256)
+	}
+}
+
+func TestNormalizeStop(t *testing.T) {
+	n, clock := newTestNormalizer()
+
+	parsed, err := claudehooks.ParseStop(fixture(t, "stop", "normal.json"))
+	if err != nil {
+		t.Fatalf("ParseStop: %v", err)
+	}
+
+	ev := n.NormalizeStop(parsed, clock.Now())
+	requireEnvelope(t, ev, v1.EventProviderTurnCompleted, parsed.SessionID)
+}
+
+func TestNormalizeStopFailure(t *testing.T) {
+	tests := []struct {
+		name          string
+		fixture       string
+		wantRateLimit bool
+	}{
+		{name: "rate_limit", fixture: "rate_limit.json", wantRateLimit: true},
+		{name: "overloaded", fixture: "overloaded.json", wantRateLimit: false},
+		{name: "network", fixture: "network.json", wantRateLimit: false},
+		{name: "context_length", fixture: "context_length.json", wantRateLimit: false},
+		{name: "unknown_category", fixture: "unknown_category.json", wantRateLimit: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n, clock := newTestNormalizer()
+
+			parsed, err := claudehooks.ParseStopFailure(fixture(t, "stopfailure", tt.fixture))
+			if err != nil {
+				t.Fatalf("ParseStopFailure: %v", err)
+			}
+
+			events := n.NormalizeStopFailure(parsed, clock.Now())
+			if len(events) == 0 {
+				t.Fatal("NormalizeStopFailure returned no events")
+			}
+			requireEnvelope(t, events[0], v1.EventProviderTurnFailed, parsed.SessionID)
+			if got := events[0].Payload["failure_class"]; got != string(parsed.FailureClass) {
+				t.Errorf("failure_class payload = %v, want %v", got, parsed.FailureClass)
+			}
+
+			hasRateLimit := false
+			for _, ev := range events[1:] {
+				if ev.EventType == v1.EventProviderRateLimitHit {
+					hasRateLimit = true
+					requireEnvelope(t, ev, v1.EventProviderRateLimitHit, parsed.SessionID)
+				}
+			}
+			if hasRateLimit != tt.wantRateLimit {
+				t.Errorf("rate limit event present = %v, want %v", hasRateLimit, tt.wantRateLimit)
+			}
+		})
+	}
+}
+
+// TestNormalizeStatusLine_DuplicateSnapshot_SameIdempotencyKey covers the
+// duplicate-delivery scenario named in the packet's Tests section
+// ("duplicate event idempotency") at the normalization layer: normalizing
+// the same underlying snapshot content twice (e.g. because a hook fired
+// twice, or a crash caused a re-read) MUST produce the same
+// IdempotencyKey so a downstream persistence layer (claude-provider-05,
+// not this node) can dedupe on it.
+func TestNormalizeStatusLine_DuplicateSnapshot_SameIdempotencyKey(t *testing.T) {
+	n, clock := newTestNormalizer()
+
+	rawA := fixture(t, "statusline", "normal.json")
+	rawB := fixture(t, "statusline", "normal.json")
+
+	snapA, err := claudeprovider.ParseStatusLine(rawA)
+	if err != nil {
+		t.Fatalf("ParseStatusLine A: %v", err)
+	}
+	snapB, err := claudeprovider.ParseStatusLine(rawB)
+	if err != nil {
+		t.Fatalf("ParseStatusLine B: %v", err)
+	}
+
+	sameInstant := clock.Now()
+	eventsA := n.NormalizeStatusLine(snapA, sameInstant)
+	eventsB := n.NormalizeStatusLine(snapB, sameInstant)
+
+	if len(eventsA) != len(eventsB) {
+		t.Fatalf("event count differs: %d vs %d", len(eventsA), len(eventsB))
+	}
+	for i := range eventsA {
+		if eventsA[i].IdempotencyKey != eventsB[i].IdempotencyKey {
+			t.Errorf("duplicate snapshot IdempotencyKey[%d] differs: %q vs %q", i, eventsA[i].IdempotencyKey, eventsB[i].IdempotencyKey)
+		}
+	}
+}

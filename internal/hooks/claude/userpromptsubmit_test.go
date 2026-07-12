@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -103,8 +104,8 @@ func TestParseUserPromptSubmit(t *testing.T) {
 				if err == nil {
 					t.Fatal("expected error, got nil")
 				}
-				derr, ok := err.(*domain.Error)
-				if !ok || derr.Code != domain.ErrCodeValidation {
+				var derr *domain.Error
+				if !errors.As(err, &derr) || derr.Code != domain.ErrCodeValidation {
 					t.Fatalf("expected ErrCodeValidation, got %v", err)
 				}
 				return
@@ -164,7 +165,7 @@ func assertNoRawText(t *testing.T, v reflect.Value, needle string) {
 		if strings.Contains(v.String(), needle) {
 			t.Fatalf("field of kind string contains raw prompt text: %q", v.String())
 		}
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if !v.IsNil() {
 			assertNoRawText(t, v.Elem(), needle)
 		}
@@ -202,8 +203,8 @@ func TestEncodeUserPromptSubmitResponse_UnknownDecision(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown decision")
 	}
-	derr, ok := err.(*domain.Error)
-	if !ok || derr.Code != domain.ErrCodeValidation {
+	var derr *domain.Error
+	if !errors.As(err, &derr) || derr.Code != domain.ErrCodeValidation {
 		t.Fatalf("expected ErrCodeValidation, got %v", err)
 	}
 }
