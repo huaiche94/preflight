@@ -2,16 +2,53 @@
 
 ## Handoff notes (Constitution §6.7 / agents/foundation.md "Handoff")
 
-- **DB constructor**: not yet built. Deferred to foundation-05
-  (`internal/storage/sqlite/db.go`), out of scope for this wave.
-- **Transaction API**: not yet built. Deferred to foundation-05/06;
-  must conform to `app.TxRunner.WithTx` frozen in `internal/app/ports.go`.
-- **Migration naming convention**: not yet decided in code (no migration
-  files exist yet). `CONTRACT_FREEZE.md` fixes foundation's numeric range
-  as 0000-0009; the `NNNN_description.sql` filename shape referenced by
-  `agents/foundation.md`'s exclusive-paths glob
-  (`internal/storage/sqlite/migrations/0000-0009_*.sql`) is the only
-  naming detail frozen so far. Deferred to foundation-06.
+- **DB constructor**: `sqlite.Open(ctx, path) (*DB, error)`
+  (`internal/storage/sqlite/db.go`, foundation-05). Opens (creating if
+  needed) a SQLite file via `modernc.org/sqlite` and applies Preflight's
+  fixed pragmas (ADD §12.1) both via DSN `_pragma` query parameters (so
+  every pooled connection gets them) and via an explicit `applyPragmas`
+  exec on open (belt-and-braces against driver DSN-parsing differences).
+  `path == ":memory:"` is supported for tests via a shared-cache DSN.
+  `Open` does NOT create schema or run migrations — call `DB.Migrate`
+  separately.
+- **Transaction API**: `(*DB).WithTx(ctx, app.TxFunc) error` implements
+  the frozen `app.TxRunner` port exactly (compile-time-asserted in
+  `db.go` via `var _ app.TxRunner = (*DB)(nil)`). Because `app.TxFunc` is
+  `func(ctx context.Context) error` — it does NOT receive a `*sql.Tx`
+  parameter directly, and `internal/app/ports.go` is frozen and out of
+  foundation's control to change — `WithTx` stores the active `*sql.Tx`
+  in the `ctx` it passes to `fn` (an unexported `txKey{}` context key).
+  Callers inside a `TxFunc` closure retrieve it via
+  `sqlite.QuerierFromContext(ctx, db)`, which returns the active `*sql.Tx`
+  if called from inside `WithTx`, or `db`'s plain `*sql.DB` pool
+  otherwise — so storage code can be written once against the `Querier`
+  interface (`ExecContext`/`QueryContext`/`QueryRowContext`) and works
+  identically whether or not it happens to be running inside a
+  transaction. **Any role implementing a store on top of this (e.g.
+  `checkpoint`, `predictor`) should follow this
+  `QuerierFromContext(ctx, db)` pattern rather than threading a `*sql.Tx`
+  through their own function signatures.**
+- **Migration naming convention**: `NNNN_name.sql` (4+ zero-padded
+  digits, underscore, `[a-zA-Z0-9_]+` name, `.sql` extension), enforced
+  by `migrate.go`'s `migrationFilePattern` regex and `LoadMigrationsFS`,
+  matching `CONTRACT_FREEZE.md`'s foundation range (0000-0009) and ADD
+  §12.5's `0001_name.sql` example. `LoadMigrationsFS(fsys fs.FS, root
+  string)` reads every `*.sql` file directly under `root` (typically a
+  `go:embed` of `internal/storage/sqlite/migrations`), parses filenames,
+  and returns `[]Migration` sorted ascending by version — a duplicate
+  version or malformed filename is a hard error (fail-closed, not
+  skip-and-warn). `(*DB).Migrate(ctx, migrations)` applies every
+  migration whose version exceeds the database's current highest applied
+  version, each inside its own transaction, recording it in an
+  auto-created `schema_migrations(version, name, applied_at)` table. If
+  the database's current version is HIGHER than any version in the
+  passed-in migration set (this binary is older than whatever last
+  migrated the DB), `Migrate` returns `ErrSchemaNewerThanBinary` and
+  applies nothing — callers MUST treat this as fail-closed/read-only per
+  ADD §12.5. **No migration `.sql` files exist yet** — that is
+  foundation-06, explicitly out of scope for foundation-05; `Migrate`
+  against an empty/nil migration slice is a tested no-op that still
+  creates `schema_migrations`.
 - **Dependency requests**: none outstanding. `go.mod` now carries
   `github.com/google/uuid` (UUIDv7 IDGenerator), `github.com/spf13/cobra`
   (CLI), and `go.yaml.in/yaml/v3` (YAML config load — promoted from an
@@ -256,5 +293,85 @@ assumptions:
     whichever later node actually starts a long-lived daemon process
     (runtime role, out of scope for foundation per agents/foundation.md).
     This node delivers the reusable primitive only."
+blockers: []
+```
+
+```yaml
+node: foundation-05
+status: completed
+artifacts:
+  - internal/storage/sqlite/db.go
+  - internal/storage/sqlite/migrate.go
+  - internal/storage/sqlite/db_test.go
+  - internal/storage/sqlite/migrate_test.go
+  - go.mod (modernc.org/sqlite promoted to direct dependency)
+  - go.sum
+validation:
+  - "gofmt -l internal/storage/sqlite   # empty output"
+  - "go build ./internal/storage/sqlite/..."
+  - "go vet ./internal/storage/sqlite/..."
+  - "go test ./internal/storage/sqlite/...   # PASS, 24 test cases"
+commit: b0ef5a0
+next_action: foundation-09 (Makefile/Taskfile/lint config) — foundation-06
+  (actual migration .sql files) is explicitly NOT in this wave's scope
+assumptions:
+  - "Pragmas (ADD SS12.1 / CONTRACT_FREEZE.md) are applied TWICE, by
+    design, not redundantly by accident: (1) encoded as _pragma DSN query
+    parameters on every Open() call, per modernc.org/sqlite's documented
+    DSN convention, so every connection the pool subsequently opens gets
+    them automatically; AND (2) executed explicitly via applyPragmas
+    against the pool's first connection immediately after Open. This is
+    belt-and-braces given the High-risk flag this node carries in
+    EXECUTION_DAG.md ('WAL/busy-timeout/FK pragmas are load-bearing for
+    every later role') — verified with tests that actually query each
+    pragma's live value (PRAGMA journal_mode etc.), not merely that Open()
+    returns no error, per the task instruction's explicit warning against
+    that shortcut."
+  - "TestBusyTimeout_ConcurrentWriteWaitsInsteadOfFailingImmediately
+    exercises the busy_timeout pragma's REAL effect (a second writer waits
+    behind an uncommitted transaction and succeeds once it commits,
+    instead of failing instantly with SQLITE_BUSY) rather than only
+    asserting the pragma's reported value — this is the 'locked/busy
+    behavior' required test from agents/foundation.md."
+  - "app.TxFunc's frozen signature (func(ctx context.Context) error, no
+    *sql.Tx parameter) forced a context-based transaction handoff design:
+    WithTx stores the active *sql.Tx under an unexported context key and
+    callers retrieve it via the new QuerierFromContext(ctx, db) helper.
+    This was not a free design choice — internal/app/ports.go is frozen
+    and owned exclusively by contract-integrator (Constitution SS4.3), so
+    foundation could not add a *sql.Tx parameter to TxFunc even if a
+    'pass the tx directly' design would have been simpler. This pattern
+    (QuerierFromContext) is the one every later role's store MUST use to
+    stay compatible with the frozen WithTx boundary — documented in the
+    Handoff section above and worth flagging explicitly to
+    checkpoint/predictor/claude-provider/runtime, whichever role writes
+    the first real store on top of this engine."
+  - "modernc.org/sqlite (pure Go, no CGO) was added per Preflight_ADD.md
+    SS1.4's explicit tech-stack decision, exactly as pre-authorized by the
+    task instruction. go mod tidy pulled a substantial transitive tree
+    (modernc.org/libc, cc/v4, ccgo/v4, etc.) — all standard for this
+    driver's pure-Go C-transpilation approach, not a foundation design
+    choice; no alternative driver was evaluated since ADD names this one
+    specifically."
+  - "LoadMigrationsFS is deliberately strict: a migration filename that
+    doesn't match NNNN_name.sql, or two files claiming the same version,
+    is a hard error, not a skip-with-warning. A silently-skipped or
+    silently-reordered migration is a state-integrity bug per
+    CONTRACT_FREEZE.md's fail-closed rule for state-integrity failures
+    (as opposed to fail-open-able operational-observation failures), so
+    this errs toward refusing to proceed rather than guessing intent."
+  - "No internal/storage/sqlite/migrations/ directory and no actual .sql
+    files were created — that is foundation-06's scope (Core migrations
+    0000-0009), explicitly NOT assigned to foundation this wave per the
+    task instruction. Migrate()/LoadMigrationsFS() are fully implemented
+    and tested against synthetic in-test migrations (via testing/fstest
+    and inline Migration structs) so foundation-06 has a ready, proven
+    engine to point real .sql files at without needing further engine
+    changes."
+  - "SetMaxOpenConns(8) is a conservative, undocumented-in-ADD default —
+    no later role's real concurrency profile exists yet to tune against,
+    and ADD does not specify a connection pool size. Flagged here as an
+    assumption a later role may need to revisit once real concurrent
+    daemon+CLI+scheduler access patterns exist."
 blockers: []
 ```
