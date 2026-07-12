@@ -153,7 +153,7 @@ validation:
   - "test -s SECURITY.md && test -s CONTRIBUTING.md && test -s CODE_OF_CONDUCT.md && test -s GOVERNANCE.md   # all four exist and are non-empty (113/136/140/124 lines respectively)"
   - "manual doc review against Preflight_ADD.md §30.7 (Governance) and §30.8 (Security disclosure), and against README.md's existing 'Contributing' section and Tech stack table, for contradictions -> none found"
   - "grep -rn \"CLA\" --include=*.md .   # only CONTRIBUTING.md/GOVERNANCE.md/Preflight_ADD.md mention it, all consistent ('no CLA')"
-commit: PENDING_QA08_COMMIT
+commit: a4ab0b2
 next_action: none — qa-01 and qa-08 were this wave's full qa assignment; STOP per task instruction
 assumptions:
   - "SECURITY.md's disclosure channel is a private GitHub Security
