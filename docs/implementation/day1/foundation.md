@@ -197,3 +197,64 @@ assumptions:
     only."
 blockers: []
 ```
+
+```yaml
+node: foundation-04
+scope_note: >
+  REDUCED SCOPE per task instruction. The DAG's original foundation-04 row
+  ("Clock/IDGen/lock impls") is only partially this node's work: clock and
+  idgen were already fully implemented under foundation-01 in Wave 1 (see
+  that node's log above) and are NOT touched or reimplemented here. This
+  node's actual new work is internal/lock only.
+status: completed
+artifacts:
+  - internal/lock/lock.go
+  - internal/lock/process_unix.go
+  - internal/lock/process_windows.go
+  - internal/lock/lock_test.go
+validation:
+  - "gofmt -l internal/lock   # empty output"
+  - "go build ./internal/lock/..."
+  - "go vet ./internal/lock/..."
+  - "go test ./internal/lock/...   # PASS, 8 test cases"
+commit: 1ce3c50
+next_action: foundation-05 (SQLite engine)
+assumptions:
+  - "No Lock interface/type is frozen anywhere in internal/domain or
+    internal/app/ports.go (confirmed by grep before starting this node) —
+    the exact lock mechanism was explicitly foundation's call per the task
+    instruction ('your call on the exact mechanism'). Chose a PID-file-
+    style advisory lock (os.O_EXCL exclusive create + PID contents), not
+    an OS-level flock/LockFileEx syscall, because: (1) it needs zero new
+    dependencies (no golang.org/x/sys), (2) Preflight_ADD.md SS1.4 fixes
+    the runtime architecture as a single-machine 'modular monolith', so
+    only same-machine, not networked, mutual exclusion is required, and
+    (3) it is trivially crash-recoverable (see next bullet), which matters
+    more for a local daemon that can be killed at any point mid-turn than
+    strict kernel-enforced exclusivity would."
+  - "Stale-lock recovery: if a lock file exists but its recorded PID is not
+    a live process, Acquire treats it as abandoned (e.g. left behind by a
+    crashed daemon), removes it, and reacquires fresh rather than wedging
+    the machine forever. This is a deliberate crash-safety property, not a
+    weakening of the lock's guarantee — a purely kernel-level flock would
+    give this for free (locks release automatically when the holding
+    process dies), but the chosen O_EXCL design needed it built explicitly
+    since a plain file's existence otherwise persists across a crash."
+  - "processAlive is platform-specific (process_unix.go / process_windows.go
+    via build tags) because POSIX and Windows have fundamentally different
+    liveness-check primitives: POSIX uses the null signal (kill(pid, 0))
+    since os.FindProcess never fails on POSIX; Windows' os.FindProcess
+    actually opens a process handle and fails if the PID does not exist,
+    so success alone is sufficient there. Both files build cleanly on
+    darwin (this dev host) via the !windows/windows build constraints;
+    the windows-tagged file's correctness rests on documented Go stdlib
+    behavior (verified against Go's os package docs) since it cannot be
+    exercised on this darwin host without a Windows CI matrix (`qa-01`)."
+  - "internal/lock intentionally does not integrate with internal/storage/
+    sqlite (foundation-05, not yet built) or wire an actual daemon
+    single-instance guard into cmd/preflight — that wiring belongs to
+    whichever later node actually starts a long-lived daemon process
+    (runtime role, out of scope for foundation per agents/foundation.md).
+    This node delivers the reusable primitive only."
+blockers: []
+```
