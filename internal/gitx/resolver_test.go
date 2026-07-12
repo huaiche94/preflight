@@ -2,6 +2,7 @@ package gitx
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -121,14 +122,9 @@ func TestResolverNonexistentPath(t *testing.T) {
 	}
 }
 
-// asDomainError is a small errors.As helper local to this test file so we
-// don't need to import "errors" solely for pointer-to-pointer boilerplate
-// repeated across cases.
+// asDomainError is a small errors.As helper local to this test file that
+// unwraps err into a *domain.Error, so the checks keep working even if the
+// error is wrapped (e.g. via fmt.Errorf("...: %w", err)).
 func asDomainError(err error, target **domain.Error) bool {
-	de, ok := err.(*domain.Error)
-	if !ok {
-		return false
-	}
-	*target = de
-	return true
+	return errors.As(err, target)
 }
