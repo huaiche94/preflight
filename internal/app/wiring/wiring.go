@@ -30,7 +30,10 @@ import (
 
 	"github.com/huaiche94/preflight/internal/app"
 	"github.com/huaiche94/preflight/internal/cli"
+	"github.com/huaiche94/preflight/internal/clock"
 	"github.com/huaiche94/preflight/internal/domain"
+	"github.com/huaiche94/preflight/internal/idgen"
+	"github.com/huaiche94/preflight/internal/orchestrator"
 )
 
 // Services carries one implementation of each frozen service interface.
@@ -44,6 +47,48 @@ type Services struct {
 	StateCheckpoint      app.StateCheckpointService
 	GracefulPause        app.GracefulPauseService
 	RepositoryCheckpoint app.RepositoryCheckpointService
+
+	// Hooks configures the Claude Code hook command handlers
+	// (runtime-b04, internal/orchestrator.HookDeps). Unlike the five
+	// service fields above, this is NOT required: a caller that only
+	// needs the other P0 commands (e.g. most tests) may leave it at its
+	// zero value, and RootCmd falls back to real domain.Clock/
+	// domain.IDGenerator implementations with no event persistence or
+	// evaluation wiring (matching HookDeps' own documented nil-safe
+	// defaults — see internal/orchestrator/hooks.go). A caller that wants
+	// hook telemetry actually persisted, or UserPromptSubmit actually
+	// evaluated, sets Hooks explicitly.
+	Hooks HookSupport
+
+	// Diagnostics configures `preflight doctor`'s optional checks
+	// (runtime-b08, internal/orchestrator.DoctorDeps). Also not required:
+	// omitting it renders every doctor check CheckSkipped rather than
+	// failing container construction — doctor is meant to run even in a
+	// minimal environment (e.g. before `preflight init` has created a
+	// database at all), and reporting "skipped, not configured" for each
+	// missing piece IS doctor's correct behavior in that case, not a
+	// construction-time error.
+	Diagnostics DiagnosticsSupport
+}
+
+// HookSupport bundles the optional collaborators
+// internal/orchestrator.HookDeps needs beyond the five core services
+// above. See Services.Hooks' doc comment for the zero-value fallback
+// behavior.
+type HookSupport struct {
+	Clock     domain.Clock
+	IDs       domain.IDGenerator
+	Persister orchestrator.EventPersister
+	TxRunner  app.TxRunner
+}
+
+// DiagnosticsSupport bundles the optional collaborators
+// internal/orchestrator.DoctorDeps needs. See Services.Diagnostics' doc
+// comment for the zero-value (all-skipped) fallback behavior.
+type DiagnosticsSupport struct {
+	DB           orchestrator.DBPinger
+	Config       orchestrator.ConfigLoader
+	RequiredDirs []string
 }
 
 // App is the validated, immutable-after-construction service container.
@@ -107,15 +152,82 @@ func (a *App) RepositoryCheckpoint() app.RepositoryCheckpointService {
 }
 
 // RootCmd builds the Preflight CLI command tree for this container. This
-// is the seam between the wiring layer and internal/cli: as of
-// runtime-b02 every handler below `preflight version` is still
-// runtime-b01's honest ErrCodeUnavailable stub, so the container's
-// services are not yet threaded into individual handlers — runtime-b03+
-// replaces those stubs by passing the relevant service into each command
-// constructor, and this method is where that threading starts. Callers
-// that want the CLI wired to *this* App must obtain the tree here rather
-// than calling cli.NewRootCmd directly, so the b03+ change is invisible
-// to them.
+// is the seam between the wiring layer and internal/cli: runtime-b02
+// started from cli.NewRootCmd()'s all-stub tree; runtime-b04 (this
+// change) is the first node to actually thread a service into a command
+// constructor — the `hook claude ...` subtree is now replaced with
+// internal/cli.NewHookClaudeCmd's real handlers, wired against an
+// internal/orchestrator.HookDeps built from a.services.Hooks (falling
+// back to real domain.Clock/domain.IDGenerator implementations when the
+// caller left HookSupport at its zero value — see Services.Hooks' doc
+// comment). Every other P0 command remains cli.NewRootCmd's stub as of
+// this node; later nodes (runtime-b05, b08, ...) replace them the same
+// way. Callers that want the CLI wired to *this* App must obtain the tree
+// here rather than calling cli.NewRootCmd directly, so this replacement
+// is invisible to them.
 func (a *App) RootCmd() *cobra.Command {
-	return cli.NewRootCmd()
+	root := cli.NewRootCmd()
+
+	hookDeps := orchestrator.HookDeps{
+		Clock:      a.services.Hooks.Clock,
+		IDs:        a.services.Hooks.IDs,
+		Persister:  a.services.Hooks.Persister,
+		TxRunner:   a.services.Hooks.TxRunner,
+		Evaluation: a.services.Evaluation,
+	}
+	if hookDeps.Clock == nil {
+		hookDeps.Clock = clock.New()
+	}
+	if hookDeps.IDs == nil {
+		hookDeps.IDs = idgen.New()
+	}
+
+	replaceSubcommand(root, "hook", func(short string) *cobra.Command {
+		newHook := &cobra.Command{Use: "hook", Short: short}
+		newHook.AddCommand(cli.NewHookClaudeCmd(hookDeps))
+		return newHook
+	})
+
+	checkpointDeps := orchestrator.CheckpointCreateDeps{
+		StateCheckpoint:      a.services.StateCheckpoint,
+		RepositoryCheckpoint: a.services.RepositoryCheckpoint,
+	}
+	replaceSubcommand(root, "checkpoint", func(_ string) *cobra.Command {
+		return cli.NewCheckpointCmd(checkpointDeps)
+	})
+
+	statusDeps := orchestrator.StatusDeps{ProgressTree: a.services.ProgressTree}
+	replaceSubcommand(root, "status", func(_ string) *cobra.Command {
+		return cli.NewStatusCmd(statusDeps)
+	})
+
+	doctorDeps := orchestrator.DoctorDeps{
+		DB:           a.services.Diagnostics.DB,
+		Config:       a.services.Diagnostics.Config,
+		RequiredDirs: a.services.Diagnostics.RequiredDirs,
+	}
+	replaceSubcommand(root, "doctor", func(_ string) *cobra.Command {
+		return cli.NewDoctorCmd(doctorDeps)
+	})
+
+	return root
+}
+
+// replaceSubcommand removes root's top-level subcommand named name (a
+// no-op if none matches) and adds the command built builds returns in its
+// place. build receives the removed command's Short text so a replacement
+// can preserve it without repeating the string in two files
+// (internal/cli's stub and this wiring). Centralizes the
+// find-remove-rebuild-add pattern every runtime-b0N node that swaps a stub
+// subtree for a real one needs, so each node's RootCmd change is a single
+// call rather than a hand-rolled loop.
+func replaceSubcommand(root *cobra.Command, name string, build func(short string) *cobra.Command) {
+	for _, sub := range root.Commands() {
+		if sub.Name() != name {
+			continue
+		}
+		root.RemoveCommand(sub)
+		root.AddCommand(build(sub.Short))
+		return
+	}
 }

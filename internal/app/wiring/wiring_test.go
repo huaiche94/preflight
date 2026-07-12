@@ -1,7 +1,9 @@
 package wiring_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -221,5 +223,200 @@ func TestApp_RootCmd_BuildsP0CommandTree(t *testing.T) {
 		if !got[name] {
 			t.Errorf("RootCmd tree is missing top-level command %q", name)
 		}
+	}
+}
+
+// TestApp_RootCmd_HookClaudeIsRealNotStub proves runtime-b04's wiring:
+// `preflight hook claude user-prompt-submit` on the App-built tree is
+// internal/cli.NewHookClaudeCmd's real handler (which renders a
+// provider-compatible JSON response and returns nil), not
+// internal/cli.NewRootCmd()'s standalone ErrCodeUnavailable stub.
+func TestApp_RootCmd_HookClaudeIsRealNotStub(t *testing.T) {
+	a, err := wiring.New(fullFakeServices())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	root := a.RootCmd()
+	root.SetArgs([]string{"hook", "claude", "user-prompt-submit"})
+	root.SetIn(strings.NewReader(`{"session_id":"sess-1","prompt":"do a thing"}`))
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("hook claude user-prompt-submit: %v (want the real handler to succeed, not the stub's ErrCodeUnavailable)", err)
+	}
+	if out.Len() == 0 {
+		t.Fatal("hook claude user-prompt-submit produced no stdout output")
+	}
+	var decoded map[string]any
+	if jsonErr := json.Unmarshal(bytes.TrimSpace(out.Bytes()), &decoded); jsonErr != nil {
+		t.Fatalf("stdout is not valid JSON: %v (output: %q)", jsonErr, out.String())
+	}
+}
+
+// TestApp_RootCmd_HookClaudeFallsBackToRealClockWhenHooksUnset proves the
+// zero-value HookSupport fallback: a Services value with Hooks left unset
+// still produces a working hook command tree (real domain.Clock/
+// domain.IDGenerator, no persistence) rather than panicking on a nil
+// Clock inside the orchestrator's Normalizer construction.
+func TestApp_RootCmd_HookClaudeFallsBackToRealClockWhenHooksUnset(t *testing.T) {
+	services := fullFakeServices() // Hooks left at zero value
+	a, err := wiring.New(services)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	root := a.RootCmd()
+	root.SetArgs([]string{"hook", "claude", "stop"})
+	root.SetIn(strings.NewReader(`{"session_id":"sess-1","hook_event_name":"Stop","stop_hook_active":false}`))
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("hook claude stop with zero-value HookSupport: %v", err)
+	}
+}
+
+// TestApp_RootCmd_HookClaudeMalformedInputStillProducesValidJSON proves
+// "hook fallback remains syntactically valid when Preflight fails"
+// end-to-end through the wired CLI tree, not just at the orchestrator
+// unit level (internal/orchestrator/hooks_test.go already covers the
+// orchestrator function directly) — malformed stdin on
+// user-prompt-submit must still yield a valid JSON allow response, never
+// a raw error dumped to stdout.
+func TestApp_RootCmd_HookClaudeMalformedInputStillProducesValidJSON(t *testing.T) {
+	a, err := wiring.New(fullFakeServices())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	root := a.RootCmd()
+	root.SetArgs([]string{"hook", "claude", "user-prompt-submit"})
+	root.SetIn(strings.NewReader(`{ not valid json`))
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("hook claude user-prompt-submit with malformed input: %v, want fail-open success", err)
+	}
+	var decoded map[string]any
+	if jsonErr := json.Unmarshal(bytes.TrimSpace(out.Bytes()), &decoded); jsonErr != nil {
+		t.Fatalf("stdout is not valid JSON on malformed input: %v (output: %q)", jsonErr, out.String())
+	}
+}
+
+// TestApp_RootCmd_CheckpointCreateIsRealNotStub proves runtime-b05's
+// wiring: `preflight checkpoint create` on the App-built tree calls
+// through to the injected StateCheckpoint/RepositoryCheckpoint fakes (in
+// state-then-repository order) and renders a real JSON result, not
+// internal/cli.NewRootCmd()'s standalone ErrCodeUnavailable stub.
+func TestApp_RootCmd_CheckpointCreateIsRealNotStub(t *testing.T) {
+	var callOrder []string
+	services := fullFakeServices()
+	services.StateCheckpoint = &fakes.FakeStateCheckpointService{
+		CreateFunc: func(_ context.Context, req app.CreateStateCheckpointRequest) (domain.StateCheckpoint, error) {
+			callOrder = append(callOrder, "state")
+			return domain.StateCheckpoint{ID: "sc-1", TaskID: req.TaskID}, nil
+		},
+	}
+	services.RepositoryCheckpoint = &fakes.FakeRepositoryCheckpointService{
+		CreateFunc: func(_ context.Context, _ app.CreateRepositoryCheckpointRequest) (app.RepositoryCheckpoint, error) {
+			callOrder = append(callOrder, "repository")
+			return app.RepositoryCheckpoint{ID: "rc-1", GitHead: "cafef00d"}, nil
+		},
+	}
+
+	a, err := wiring.New(services)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	root := a.RootCmd()
+	root.SetArgs([]string{"checkpoint", "create", "--task-id", "task-1", "--worktree-id", "wt-1"})
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("checkpoint create: %v (want the real handler to succeed, not the stub's ErrCodeUnavailable)", err)
+	}
+	if len(callOrder) != 2 || callOrder[0] != "state" || callOrder[1] != "repository" {
+		t.Fatalf("call order = %v, want [state, repository] end-to-end through the wired CLI command", callOrder)
+	}
+
+	var decoded map[string]any
+	if jsonErr := json.Unmarshal(bytes.TrimSpace(out.Bytes()), &decoded); jsonErr != nil {
+		t.Fatalf("stdout is not valid JSON: %v (output: %q)", jsonErr, out.String())
+	}
+	if decoded["state_checkpoint_id"] != "sc-1" {
+		t.Errorf("state_checkpoint_id = %v, want sc-1", decoded["state_checkpoint_id"])
+	}
+	if decoded["repository_checkpoint_id"] != "rc-1" {
+		t.Errorf("repository_checkpoint_id = %v, want rc-1", decoded["repository_checkpoint_id"])
+	}
+}
+
+// TestApp_RootCmd_StatusIsRealNotStub proves runtime-b08's wiring:
+// `preflight status` on the App-built tree calls through to the injected
+// ProgressTree fake and renders real JSON, not the standalone stub.
+func TestApp_RootCmd_StatusIsRealNotStub(t *testing.T) {
+	services := fullFakeServices()
+	services.ProgressTree = &fakes.FakeProgressTreeService{
+		SnapshotFunc: func(_ context.Context, taskID domain.TaskID) (app.ProgressTreeSnapshot, error) {
+			return app.ProgressTreeSnapshot{TaskID: taskID, Nodes: []app.ProgressNode{{ID: "n1"}}}, nil
+		},
+	}
+	a, err := wiring.New(services)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	root := a.RootCmd()
+	root.SetArgs([]string{"status", "--session-id", "sess-1", "--task-id", "task-1"})
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("status: %v (want the real handler to succeed, not the stub's ErrCodeUnavailable)", err)
+	}
+	var decoded map[string]any
+	if jsonErr := json.Unmarshal(bytes.TrimSpace(out.Bytes()), &decoded); jsonErr != nil {
+		t.Fatalf("stdout is not valid JSON: %v (output: %q)", jsonErr, out.String())
+	}
+	if decoded["has_progress_tree"] != true {
+		t.Errorf("has_progress_tree = %v, want true", decoded["has_progress_tree"])
+	}
+}
+
+// TestApp_RootCmd_DoctorIsRealNotStub proves runtime-b08's wiring:
+// `preflight doctor` on the App-built tree runs real checks (here, all
+// skipped since Diagnostics was left at its zero value) and renders real
+// JSON, not the standalone stub's ErrCodeUnavailable.
+func TestApp_RootCmd_DoctorIsRealNotStub(t *testing.T) {
+	a, err := wiring.New(fullFakeServices())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	root := a.RootCmd()
+	root.SetArgs([]string{"doctor"})
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("doctor: %v (want the real handler to succeed, not the stub's ErrCodeUnavailable)", err)
+	}
+	var decoded map[string]any
+	if jsonErr := json.Unmarshal(bytes.TrimSpace(out.Bytes()), &decoded); jsonErr != nil {
+		t.Fatalf("stdout is not valid JSON: %v (output: %q)", jsonErr, out.String())
+	}
+	if decoded["healthy"] != true {
+		t.Errorf("healthy = %v, want true (zero-value Diagnostics means all-skipped, which is healthy)", decoded["healthy"])
 	}
 }
