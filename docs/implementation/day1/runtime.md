@@ -1315,3 +1315,206 @@ blockers: []
   `wake_jobs` already references) is flagged in `runtime-a05`'s own
   section above for a later integration node, not silently resolved or
   left undiscoverable.
+
+# Wave 8
+
+Branch: `day1/runtime`, synced from `main` via `git fetch origin && git
+merge origin/main` (fast-forward, clean — no conflicts) before any Wave 8
+work, landing at `2b7c29c`. Brings in Wave 7's integrated state: `checkpoint`'s
+real `internal/statecheckpoint.Service` (`app.StateCheckpointService`) and
+`internal/repocheckpoint`'s orphan-scan/crash-safety hardening, and
+`predictor`'s real `internal/evaluation.Service`
+(`app.EvaluationService`/`ConsumeAuthorization`, `predictor-09`). Per the
+task brief, `predictor-10`'s authorization-hardening pass is a concurrent
+sibling this same wave, not yet mergeable — this wave still uses
+`internal/testutil/fakes.FakeEvaluationService` for the one
+`ConsumeAuthorization` call this node makes, consistent with the
+established fake-then-swap pattern.
+
+Assigned node: `runtime-a08` (Resume validation).
+
+## runtime-a08 — Resume validation
+
+### What shipped
+
+- `internal/pause/resumevalidation.go` — the real check
+  `lifecycle.go`'s package comment named as its own explicit gap: four
+  independently-swappable checkers, one per agents/runtime.md Part A
+  deliverable 8 check, each returning a uniform `CheckResult{Pass, Reason,
+  Detail}`:
+  - `CheckQuotaSafety` (`QuotaSnapshotReader` seam): re-reads current quota
+    for the same limit the pause-time baseline recorded and fails if it has
+    gotten WORSE (higher `UsedPercent`, or a new transition into
+    `Reached`) — never assumed safe on an unreadable comparison (nil
+    `UsedPercent` on either side fails closed).
+  - `CheckRepositoryCompatibility` (`app.RepositoryCheckpointService.Verify`
+    — REAL, checkpoint-b04, integrated since Wave 5 — plus a package-local
+    `RepoFingerprintReader` seam for the CURRENT repository state): first
+    confirms the pause-time checkpoint itself still verifies intact, then
+    compares its recorded `GitHead` against the current fingerprint. No
+    change at all passes trivially; a change that overlaps the paused
+    work's own files always blocks (`ReasonRepositoryOverlapBlocks`,
+    regardless of policy); a non-overlapping ("unrelated") change is
+    allowed or blocked per a caller-supplied `RepoChangePolicy`
+    (`RepoChangePolicyAllowUnrelated` default, or `RepoChangePolicyBlockAny`).
+  - `CheckSessionCapability` (`SessionCapabilityReader` seam): the provider
+    session must currently report `Resumable`, plus an optional explicit
+    `domain.ProviderCapabilities.SessionResume` requirement.
+  - `CheckAuthorization` (`app.EvaluationService.ConsumeAuthorization` —
+    FAKE this wave, see below): a rejected/expired/already-consumed
+    authorization and a genuinely-unreachable authorization service are
+    both failures, but with distinct reason codes
+    (`ReasonAuthorizationInvalid` vs. `ReasonAuthorizationServiceUnavailable`)
+    so a caller/audit trail can tell "we asked and it said no" apart from
+    "we could not ask."
+
+  `ValidateResume(ctx, ResumeValidationDeps, ResumeValidationRequest)
+  (ResumeValidationResult, error)` orchestrates all four, in the fixed
+  order quota → repository → session → authorization (cheapest/most-
+  reschedulable first; authorization — the one-time, non-reversible
+  resource — last). It does NOT stop at the first FAILING check (a caller
+  building a full audit trail, or a human resolving `BlockedConflict` via
+  ADD §20.9's UI, needs every check's own outcome); a downstream READ
+  failure inside any one checker is reported as a failing `CheckResult`
+  with an `_UNAVAILABLE` reason code, not a Go error, so it is exactly as
+  visible in the result as any other rejection. A returned Go error is
+  reserved strictly for a composition bug (nil dependency, missing
+  `SessionID`) and aborts immediately, before running any check.
+  `ResumeValidationResult.Verdict()` maps the four results onto
+  `lifecycle.go`'s existing `ResumeRequest{Valid, QuotaUnsafe, Conflict}`
+  three-way verdict: all-pass → `Valid`; quota failing ALONE (every other
+  check passing) → `QuotaUnsafe` (reschedule, per the required test); any
+  other failure (repository, session, or authorization, alone or combined
+  with a quota failure) → `Conflict` (block) — a simultaneous quota +
+  repository failure still blocks, it does not silently reschedule past an
+  unresolved conflict.
+
+  `RescheduleWakeJobOnQuotaUnsafe` proves "unsafe quota reschedules" at the
+  scheduler-integration level, not just the pause-record state-machine
+  level `lifecycle.go`'s existing `Resume` already covers: when
+  `ValidateResume`'s verdict is `QuotaUnsafe`, it calls
+  `scheduler.Store.Fail` on the associated wake job (via a narrow
+  `WakeJobRescheduler` seam `*scheduler.Store` satisfies directly) — reusing
+  `Fail`'s existing ADD §20.7 backoff-then-retry-or-dead machinery
+  (runtime-a06) rather than inventing a second reschedule mechanism, since
+  a quota-unsafe resume attempt IS a failed attempt from the wake job's own
+  perspective. It is a no-op (does not call `Fail`) for a `Valid` or
+  `Conflict` verdict. Driving this from the actual scheduler-claimed wake
+  job in a full wake-to-resume pipeline (claim → validate → drive
+  `EventWakeDue`/`Resume` → reschedule-or-block) remains `runtime-a09`'s
+  scope, per the DAG (`runtime-a09` depends on `runtime-a08` and covers
+  `DuplicateWake`/`Cancel`); this node proves the reschedule mechanism
+  itself is correct and available.
+
+- `internal/pause/resumevalidation_test.go` — 42 tests, all named
+  `TestResumeValidation_*` (or `TestResumeValidationResult_*`) so the DAG's
+  exact validation command (`-run ResumeValidation`) selects the whole
+  file. Covers every one of agents/runtime.md's Part-A-deliverable-8
+  required tests verbatim: "unsafe quota reschedules" (both at the
+  `CheckQuotaSafety`/`Verdict()` level and, separately, proven directly
+  against the scheduler via `RescheduleWakeJobOnQuotaUnsafe` actually
+  calling `scheduler.Store.Fail`), "repo overlap blocks" (proven at both
+  `CheckRepositoryCompatibility` and `ValidateResume` levels, and shown to
+  hold regardless of policy), "unrelated repo change follows configured
+  policy" (both policies, both levels) — plus every fail-closed case named
+  in this node's own design brief: unknown/nil quota comparison, checkpoint-
+  invalid, fingerprint-unreadable, session-not-resumable, capability-
+  confirmed-absent, authorization-rejected vs. authorization-service-
+  unavailable (distinct reason codes), nil-dependency validation for every
+  one of the five `ResumeValidationDeps` fields, malformed-request
+  validation, the "every check still runs after an earlier FAILURE (not an
+  error)" ordering guarantee, and the "a downstream READ failure surfaces
+  as a CheckResult, not a Go error, and does not block later checks"
+  distinction this node's design deliberately draws.
+
+### Design note: two failure channels, chosen deliberately
+
+`ValidateResume`/each checker returns `(CheckResult, error)`, and the two
+mean different things: a downstream service erroring when asked (quota
+read fails, `Verify` errors, session/capability read fails,
+`ConsumeAuthorization` errors) is captured as a FAILING `CheckResult` with
+an `_UNAVAILABLE`-suffixed reason code — still fail-closed (the check does
+not pass), but visible through the same channel a normal rejection uses, so
+a future `resume_attempts` audit row (0052_resume_attempts.sql already has
+exactly the right columns: `repository_fingerprint_before/after`,
+`quota_used_percent`, `failure_code`) or a human resolving `BlockedConflict`
+sees a labeled reason, not a generic error. A returned Go `error` is
+reserved for a composition bug (nil dependency, malformed request) and
+aborts before any check runs. An earlier draft conflated these two (treating
+every checker error as an abort-everything signal); this node's own test
+suite caught the inconsistency before commit (see Lessons Learned) and the
+design was corrected to the two-channel split described here, which is also
+what makes `RescheduleWakeJobOnQuotaUnsafe`'s failure-reason string
+(`result.FirstFailure()`) meaningful — it always has something to report.
+
+### Node log
+
+```yaml
+node: runtime-a08
+status: completed
+artifacts:
+  - internal/pause/resumevalidation.go
+  - internal/pause/resumevalidation_test.go
+validation:
+  - "gofmt -l internal/pause internal/scheduler   # empty"
+  - "go build ./...   # OK"
+  - "go vet ./internal/pause/... ./internal/scheduler/...   # OK"
+  - "go test ./internal/pause/... -run ResumeValidation -v   # 42/42 PASS"
+  - "go test ./internal/pause/... ./internal/scheduler/... -race -count=1   # all PASS"
+  - "go build ./... && go test ./... -race -count=1   # all PASS, whole repo, zero regressions"
+  - "golangci-lint run ./...   # 0 issues, whole repo"
+commit: <recorded below>
+next_action: runtime-a09 (duplicate-wake + cancel) — NOT this wave, per explicit scope; a09 is where a real scheduler-claimed wake job is driven through EventWakeDue -> ValidateResume -> Resume/RescheduleWakeJobOnQuotaUnsafe end to end
+assumptions:
+  - "app.EvaluationService.ConsumeAuthorization is FAKED this wave
+    (internal/testutil/fakes.FakeEvaluationService) — predictor-10's
+    authorization-hardening pass is a concurrent sibling this same wave,
+    not yet mergeable, per the task brief's explicit instruction, consistent
+    with the established fake-then-swap pattern (runtime-a05/b05 did the
+    same for checkpoint-a05/b04 in earlier waves)."
+  - "RepoFingerprintReader is this package's OWN narrow interface, not
+    internal/gitx.Fingerprint directly — internal/pause does not take a
+    compile-time dependency on checkpoint's Git plumbing package merely to
+    declare a seam; a future integration node adapts a real
+    gitx.Fingerprint onto RepoFingerprint (HeadOID + ChangedPaths)."
+  - "QuotaSnapshotReader/SessionCapabilityReader are also this package's own
+    narrow seams, not direct uses of the frozen app.QuotaReader or a
+    claude-provider capability port — a future integration node adapts the
+    real, wider signals behind these narrower interfaces, mirroring this
+    package's existing CheckpointPersister/Interrupter (safepoint.go)
+    precedent for 'declare the narrowest seam this node needs, let a later
+    wiring node adapt the real thing.'"
+  - "RescheduleWakeJobOnQuotaUnsafe requires the caller to already hold the
+    wake job's lease (scheduler.Store.Fail's own precondition) — correct
+    for the scheduler-driven wake pipeline (a09's scope) but not applicable
+    to a manual `preflight resume` invocation that never claimed a lease;
+    a manual resume's quota-unsafe verdict is still correctly reflected on
+    the PAUSE RECORD via Resume/Verdict regardless."
+  - "PausedWorkPaths (the paths RepositoryCompatibility's overlap check
+    compares against) is caller-supplied on ResumeValidationRequest, not
+    derived by this node — deriving 'which paths did the paused work
+    touch' from the Progress Tree/repository checkpoint's own manifest is
+    a future integration node's concern, not part of the validation LOGIC
+    this node builds."
+blockers: []
+```
+
+## Wave 8 cross-node observations
+
+- This wave's one node closes the last explicitly-named gap in
+  `lifecycle.go`'s `Resume` (its own package comment named runtime-a08 as
+  the owner of "real resume validation," not yet built) — `Resume` itself
+  was not modified; `ValidateResume`/`Verdict()` are additive, designed to
+  feed `Resume`'s existing caller-supplied-verdict parameter without
+  requiring any change to `lifecycle.go`'s frozen shape from prior waves.
+- Consistent with this role's established practice, the one real judgment
+  call with cross-wave consequence (the two-channel failure design: normal
+  `CheckResult` failures vs. composition-bug Go errors) is documented
+  explicitly in its own section above, not left implicit — a future reader
+  extending any one checker should follow the same split rather than
+  reintroducing the conflated version this node's own tests caught first.
+- No new ADRs, no change-request escalations, and no frozen-contract
+  questions this wave. `app.RepositoryCheckpointService.Verify` and
+  `app.EvaluationService.ConsumeAuthorization`'s frozen signatures
+  (`internal/app/ports.go`) were used exactly as declared, with no
+  requested addition.
