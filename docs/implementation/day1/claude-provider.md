@@ -95,3 +95,34 @@ assumptions:
   - "Raw error message text is deliberately never retained on StopFailureEvent (only ErrorMessageLen, an int) even though the packet's Privacy section is written primarily about prompts - applied the same discipline defensively since provider error messages can echo back request content."
 blockers: []
 ```
+
+---
+
+## Wave 2
+
+```yaml
+node: claude-provider-04
+status: completed
+artifacts:
+  - internal/telemetry/claude/normalizer.go
+  - internal/telemetry/claude/normalizer_test.go
+  - internal/telemetry/claude/privacy_test.go
+validation:
+  - "gofmt -l internal/telemetry/claude  -> clean"
+  - "go build ./internal/telemetry/claude/...  -> ok"
+  - "go vet ./internal/telemetry/claude/...  -> ok"
+  - "go test ./internal/telemetry/claude/... -v  -> PASS (9 tests, incl. 5 StopFailure fixture subtests, idempotency-determinism test, duplicate-snapshot idempotency test, 2 privacy-assertion tests)"
+  - "go build ./...  -> ok (no cross-package regressions)"
+  - "go test ./internal/providers/claude/... ./internal/hooks/claude/... ./internal/telemetry/claude/...  -> ok (Wave-1 packages unaffected)"
+commit: PENDING_FILL_AFTER_COMMIT
+next_action: claude-provider-06 (this wave; claude-provider-05/-07 out of scope for this wave per instructions)
+assumptions:
+  - "pkg/protocol/v1.EventType's frozen taxonomy (verified by reading pkg/protocol/v1/event.go directly, commit ac99215 base) already contains every event type this node needs: EventProviderContextObserved, EventProviderUsageObserved, EventProviderQuotaObserved (from StatusLineSnapshot), EventProviderTurnStarted (from UserPromptSubmitEvent), EventProviderTurnCompleted (from StopEvent), EventProviderTurnFailed + EventProviderRateLimitHit (from StopFailureEvent, the latter only when FailureClass == domain.FailureProviderRateLimit). No contract gap was found; no new EventType was added by this role."
+  - "ADR-041 (predictor's Token/Quota Forecast layer, landed on main after this branch's Wave 1) was confirmed out of scope for this node per the task brief: pkg/protocol/v1.Event was untouched by ADR-041 and this branch intentionally did not merge/rebase onto main, so the frozen envelope read here is the same one contract-integrator-04 froze at Bootstrap (commit 4262b4b)."
+  - "domain.IDGenerator and domain.Clock (internal/domain/clock.go, frozen at Bootstrap, contract-integrator-owned) are used as the Normalizer's injected dependencies for EventID generation and ObservedAt/OccurredAt timestamps, rather than this role calling crypto/rand or time.Now() directly. No concrete domain.IDGenerator implementation exists yet on this branch (foundation-06's internal/idgen is a later, unmerged node this branch does not depend on) — package tests supply a deterministic fake (seqIDs) instead of a real UUIDv7 generator. The real generator will be wired in by whichever role assembles the end-to-end hook-to-storage path (out of scope for claude-provider-04 itself, which only produces Event values, not a wired pipeline)."
+  - "IdempotencyKey's exact digest algorithm was left to this role per CONTRACT_FREEZE.md ('Owning role... defines the exact digest algorithm'): a SHA-256 over event-kind-tag + session ID + (+ limit ID for quota events) + an observedAt timestamp, unit-separator-joined. This is a judgment call, not a frozen contract — a later role persisting these events (claude-provider-05, this branch's next wave, not started) may need a different granularity (e.g. incorporating a monotonic sequence number) if the observedAt-second granularity proves too coarse for true duplicate-vs-distinct-observation disambiguation; flagged here for that role."
+  - "One StatusLineSnapshot can normalize into up to 4 events (context, usage, five-hour quota, seven-day quota) because each maps to a distinct frozen EventType and CONTRACT_FREEZE.md's 'unknown is not zero' rule means a wholly-absent measurement must not synthesize a placeholder event. This is this role's own design choice (the packet does not specify 1:1 vs 1:N struct-to-event mapping) — NormalizeStatusLine's doc comment explains the reasoning; contract-integrator was not blocking on this since pkg/protocol/v1.Event's shape does not constrain cardinality of struct-to-event mapping."
+  - "StopFailureEvent's classified FailureClass == domain.FailureProviderRateLimit also emits a second EventProviderRateLimitHit event alongside the primary EventProviderTurnFailed event (both from a single hook payload) since the frozen taxonomy has both types and they are not mutually exclusive (a turn can fail because of a rate limit). This is a judgment call about fan-out, not a contract requirement — documented in NormalizeStopFailure's doc comment for predictor/qa roles that may consume these events downstream."
+blockers: []
+```
+
