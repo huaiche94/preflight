@@ -510,7 +510,7 @@ validation:
   - "go build ./... -> clean"
   - "go vet ./... -> clean"
   - "golangci-lint run ./... (whole repo) -> 0 issues"
-commit: 3af8bcb-placeholder
+commit: b79df6b
 next_action: foundation-08 (path/config precedence tests) — foundation-07
   explicitly out of scope this wave per task instruction
 assumptions:
