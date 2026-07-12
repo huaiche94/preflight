@@ -747,7 +747,7 @@ validation:
   - "go vet ./... -> clean"
   - "gofmt -l internal/storage/sqlite -> empty output"
   - "golangci-lint run ./... (whole repo) -> 0 issues"
-commit: <pending — recorded at commit time>
+commit: 042ed54
 next_action: none — foundation-07 was this wave's sole assigned node; STOP
   per task instruction once Validated
 assumptions:
