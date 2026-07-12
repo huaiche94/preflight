@@ -1,11 +1,22 @@
 # Preflight Day-1 Execution DAG
 
+> **STALE — pending regeneration.** This DAG was built against the old
+> nine-role (`A00`–`A08`) structure and `agent-packets/`. The repository
+> owner has since consolidated to seven semantically-named roles under
+> `agents/` (`checkpoint` = old `A03`+`A04`; `runtime` = old `A06`+`A07`;
+> see `agents/README.md`). Task IDs, the Mermaid graph, the topological
+> list, and the summary stats below all still reference the old scheme and
+> need a fresh pass before anyone is spawned against them. Per the owner's
+> preferred process order (Inventory → Normalize → DAG → **Dependency
+> Review** → Spawn Team → ...), regenerating this file is the explicit next
+> step, done deliberately rather than folded into the restructuring commit.
+
 | Field | Value |
 |---|---|
-| Source | `Preflight_ADD.md` + `Preflight_Day1_Parallel_Execution_Plan.md` (+ `agent-packets/0X-*.md`, canonical per those docs) |
-| Scope | Full task-level breakdown of the Day-1 nine-agent (A00–A08) vertical slice |
-| Status | **Proposed — not yet approved. No teammates created. No code written.** |
-| Generated | 2026-07-12 |
+| Source | `Preflight_ADD.md` + `Preflight_Day1_Parallel_Execution_Plan.md` (+ `agent-packets/0X-*.md`, canonical per those docs **at the time this was generated** — now `agents/*.md`, see banner above) |
+| Scope | Full task-level breakdown of the Day-1 nine-agent (A00–A08) vertical slice — **pre-consolidation** |
+| Status | **Stale. Superseded pending regeneration. No teammates created. No code written.** |
+| Generated | 2026-07-12 (superseded same day by the `agents/` restructuring) |
 
 ---
 

@@ -18,15 +18,17 @@ not "how do we continue?" but **"should we even start this turn?"**
 
 | Document | Role |
 |---|---|
-| [`Preflight_ADD.md`](Preflight_ADD.md) | **The single authoritative architecture and implementation specification.** When code, issues, PRs, or comments conflict with it, this document (and accepted ADRs under `docs/adr/`) wins. |
-| [`AGENTS.md`](AGENTS.md) | Contributor/agent instructions — required reading before any implementation work. |
-| [`Preflight_Day1_Parallel_Execution_Plan.md`](Preflight_Day1_Parallel_Execution_Plan.md) | Subordinate execution plan for the first vertical-slice build: 9-agent (A00–A08) topology, ownership boundaries, merge order. |
-| [`agent-packets/`](agent-packets/) | One canonical hand-off packet per Day-1 agent, linked from the plan above. |
+| [`CONSTITUTION.md`](CONSTITUTION.md) | **Supreme process authority.** Single-source-of-truth hierarchy, document precedence, ADR rules, path ownership, provider-addition criteria, Progress Tree invariants, and the rules every agent must follow. Read this first. |
+| [`Preflight_ADD.md`](Preflight_ADD.md) | **The single authoritative architecture and implementation specification.** When code, issues, PRs, or comments conflict with it, this document (and accepted ADRs under `docs/adr/`) wins for architecture. |
+| [`AGENTS.md`](AGENTS.md) | Contributor/agent quick-reference — required reading before any implementation work. |
+| [`Preflight_Day1_Parallel_Execution_Plan.md`](Preflight_Day1_Parallel_Execution_Plan.md) | Subordinate execution plan for the first vertical-slice build: seven-role topology, ownership boundaries, merge order. |
+| [`agents/`](agents/) | One canonical role definition per bounded context, linked from the plan above. |
 | [`docs/repository_inventory.md`](docs/repository_inventory.md) | Audit of every markdown file in the repo and its authority/status. |
 | [`docs/archive/`](docs/archive/) | Superseded documents, kept for historical reference, not for implementation. |
 
-Do not treat any other document, prior draft, or conversation as
-authoritative over `Preflight_ADD.md`.
+`CONSTITUTION.md` governs process; `Preflight_ADD.md` governs architecture —
+see `CONSTITUTION.md` §8 for how the two relate. Do not treat any other
+document, prior draft, or conversation as authoritative over either.
 
 ## Two core continuity guarantees
 
@@ -57,12 +59,12 @@ vscode/                VS Code extension (not yet created)
 research/              Python offline research (not yet created)
 docs/adr/               accepted architecture decision records
 docs/archive/           superseded documents
-agent-packets/          Day-1 per-agent hand-off packets
+agents/                 Day-1 role definitions (one file per bounded context)
 ```
 
 ## Contributing
 
-Read `Preflight_ADD.md` and `AGENTS.md` in full before proposing or
-implementing changes. Work is milestone-gated (`Preflight_ADD.md` §31);
-do not implement ahead of the current milestone or add speculative
-abstractions for future providers/features.
+Read `CONSTITUTION.md`, `Preflight_ADD.md`, and `AGENTS.md` in full before
+proposing or implementing changes. Work is milestone-gated
+(`Preflight_ADD.md` §31); do not implement ahead of the current milestone
+or add speculative abstractions for future providers/features.

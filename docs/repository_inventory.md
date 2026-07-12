@@ -124,4 +124,38 @@ The plan in §5 was approved and executed, with §5-step-3 resolved as **Option 
 | Repository markdown audit | this file |
 | Superseded/obsolete material | `docs/archive/` (kept, not deleted, not authoritative) |
 
+---
+
+## 7. Execution log (2026-07-12, later same day) — role restructuring + Constitution
+
+The repository owner requested renaming the numbered `agent-packets/0X-*.md`
+files to semantically-named files (an LLM handed `predictor.md` needs no
+extra context to know what it owns; handed `05-predictor-policy.md` it
+does), consolidated from 9 bounded contexts to 7, plus a new supreme
+governance document. Executed:
+
+| Action | Result |
+|---|---|
+| `agent-packets/` (9 numbered packets + README + template) | Moved to `docs/archive/agent-packets-v1/`, archived with a superseded-notice banner, **not deleted** — git history also preserves it independently now that the repo is committed |
+| `agents/` (new) | 7 semantically-named role files + `README.md` + `CONTRACT_FREEZE_TEMPLATE.md`. `checkpoint.md` consolidates the old `03-progress-state-checkpoint.md` + `04-repository-checkpoint.md` (kept as internal Part A / Part B). `runtime.md` consolidates the old `06-graceful-pause-scheduler.md` + `07-runtime-cli-api.md` (same Part A / Part B treatment). `contract-integrator.md`, `foundation.md`, `claude-provider.md`, `predictor.md`, `qa.md` are straight renames of `00`, `01`, `02`, `05`, `08` respectively, with in-text "A0X" role references reworded to the new names. |
+| `Preflight_Day1_Parallel_Execution_Plan.md` | Rewritten throughout — §1 role count (8→6 bounded-context roles + 1 integrator), §3 model allocation, §4 topology diagram, §5 ownership map, §7 shared-file/migration-allocation policy, §8 worktree setup, §9 coordination artifact paths, §10 merge order, and the trailing role index — all now reference the 7 role names instead of `A00`–`A08`. Sections 1–2, 6, 11–13 (scope boundary, contract-freeze gate, demo script, cut order, review prompt) were content-preserving; no product decision changed, only the labeling of who does what. |
+| `CONSTITUTION.md` (new, repo root) | Supreme process authority: single-source-of-truth hierarchy, document precedence order, ADR rules, path-ownership rules, provider-addition criteria, Progress Tree invariants, and agent development rules — all sourced from existing `Preflight_ADD.md` normative content (§0, §6, §8, §9, FR-100–FR-110), not invented. Positioned above `README.md`/`AGENTS.md` in authority, alongside (not above) `Preflight_ADD.md` since they govern different domains (process vs. architecture — see `CONSTITUTION.md` §8). |
+| `README.md`, `AGENTS.md` | Updated to point to `CONSTITUTION.md` first, and to reference `agents/` instead of `agent-packets/`. |
+| `docs/implementation/day1/EXECUTION_DAG.md` | **Now stale** — its 83 task IDs (`A00-01`…`A08-09`) were generated against the old 9-role structure. Not regenerated in this pass; flagged as the next explicit step (a "Dependency Review" pass under the new 7-role boundaries, before any team is spawned), per the repository owner's own preferred process ordering: Inventory → Normalize → DAG → **Dependency Review** → Spawn Team → Wave 1 → Review → Wave 2. |
+| Prior (unapproved, unspawned) 4-teammate mapping proposal | Superseded by the same staleness — Stage 2 previously fanned out to 4 parallel branches (`A02`/`A03`/`A04`/`A05`); under the new structure it fans out to 3 (`claude-provider`/`checkpoint`/`predictor`). Will be redone after DAG regeneration, not before. Nothing was ever spawned, so no rework of running agents is needed. |
+
+### Resulting state: exactly one source of truth per subject (updated)
+
+| Subject | Single source of truth |
+|---|---|
+| Process, governance, invariants | `CONSTITUTION.md` |
+| Architecture | `Preflight_ADD.md` |
+| Day-1 execution mechanics | `Preflight_Day1_Parallel_Execution_Plan.md` |
+| Per-role definition | `agents/*.md` |
+| Contributor/agent instructions | `AGENTS.md` |
+| Project overview/entry point | `README.md` |
+| Repository markdown audit | this file |
+| Superseded/obsolete material | `docs/archive/` (kept, not deleted, not authoritative) |
+| Task-level execution DAG | `docs/implementation/day1/EXECUTION_DAG.md` — **stale, pending regeneration under the 7-role structure** |
+
 No two markdown files in the repository now contain overlapping authoritative content.

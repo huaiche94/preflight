@@ -1,3 +1,10 @@
+> **ARCHIVED — superseded.** This numbered nine-role (`A00`–`A08`) structure
+> has been replaced by the semantically-named, seven-role structure at
+> `agents/` (progress/state-checkpoint merged with repository-checkpoint
+> into `checkpoint.md`; pause/scheduler merged with CLI/API-orchestration
+> into `runtime.md`). Kept for historical reference only; do not hand these
+> files to a new agent — use `agents/` instead.
+
 # Agent Packets
 
 This directory holds one **hand-off packet per Day-1 agent** (`A00`–`A08`).

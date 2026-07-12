@@ -4,7 +4,7 @@
 
 Do **not** assign one agent per ADD chapter. Chapters 1–35 mix product constraints, domain contracts, provider adapters, runtime behavior, testing, and delivery concerns. A chapter-per-agent split would create duplicate types, incompatible schemas, and severe merge conflicts.
 
-Use one contract/integration agent and eight bounded-context agents. Every agent works in a dedicated Git worktree and owns a non-overlapping path set.
+Use one contract/integration role and six bounded-context roles. Every role works in a dedicated Git worktree and owns a non-overlapping path set. Role definitions live under `agents/`, one semantically-named file per role (`agents/README.md` explains the convention); two of the seven roles (`checkpoint`, `runtime`) each cover what were originally two narrower bounded contexts, merged because their two halves are always consumed together in practice — see `agents/checkpoint.md` and `agents/runtime.md` for the internal Part A / Part B split each still preserves.
 
 The day-one objective is a real vertical slice for Claude Code:
 
@@ -61,9 +61,9 @@ Day-one success is **not** “all ADD chapters implemented.” Success is provin
 
 Use Fable where correctness and state-machine reasoning dominate:
 
-- Agent 00: contract freeze and integration.
-- Agent 05: predictor/policy.
-- Agent 06: pause/scheduler.
+- `contract-integrator`: contract freeze and integration.
+- `predictor`: predictor/policy.
+- `runtime` Part A: pause/scheduler.
 - Final architecture and race-condition review.
 
 Use a cheaper coding model for deterministic implementation work when available:
@@ -71,77 +71,81 @@ Use a cheaper coding model for deterministic implementation work when available:
 - foundation/config/SQLite;
 - Claude JSON parsing and hook fixtures;
 - Git snapshot/checkpoint plumbing;
-- CLI/API wiring;
+- CLI/API wiring (`runtime` Part B);
 - CI and test harness.
 
 If every worker must use Fable, do not give the complete 161 KB ADD to every worker. Give each worker only:
 
 1. this common plan;
-2. `CONTRACT_FREEZE.md` after Agent 00 produces it;
+2. `CONTRACT_FREEZE.md` after `contract-integrator` produces it;
 3. its assigned ADD chapters;
-4. its agent packet.
+4. its role file from `agents/`.
 
 ## 4. Parallel topology
 
 ```text
                          ┌─────────────────────────────┐
-                         │ A00 Contract + Integrator   │
-                         │ freeze types / ports / IDs  │
+                         │ contract-integrator          │
+                         │ freeze types / ports / IDs   │
                          └──────────────┬──────────────┘
                                         │
-       ┌────────────────┬───────────────┼───────────────┬────────────────┐
-       ▼                ▼               ▼               ▼                ▼
- A01 Foundation    A02 Claude      A03 Progress     A04 Repository   A05 Predictor
- Config/SQLite     Telemetry       State CP         Checkpoint       Policy
-       │                │               │               │                │
-       └────────────────┴───────────────┴───────────────┴────────────────┘
+                                        ▼
+                              foundation
+                              Go module / config / SQLite
+                                        │
+                    ┌───────────────────┼───────────────────┐
+                    ▼                   ▼                   ▼
+             claude-provider        checkpoint           predictor
+             Telemetry/Hooks    State CP + Repo CP     Risk/Policy/Auth
+                    │                   │                   │
+                    └───────────────────┴───────────────────┘
                                         │
                                         ▼
-                              A06 Pause + Scheduler
+                                    runtime
+                        Pause+Scheduler, then CLI/API/Orchestration
                                         │
                                         ▼
-                              A07 CLI/API Orchestration
+                                       qa
+                              Security/CI/E2E
                                         │
                                         ▼
-                              A08 QA/Security/CI/E2E
-                                        │
-                                        ▼
-                              A00 final integration
+                              contract-integrator
+                              (final integration)
 ```
 
-A06 and A07 may start immediately against frozen interfaces and fakes. They must not wait for concrete implementations.
+`runtime` may start coding immediately against frozen interfaces and fakes for both of its parts (it does not need to wait for `checkpoint` or `predictor` concrete implementations) — but its Part B (CLI/API/orchestration) genuinely depends on its own Part A (pause/scheduler) being far enough along to wire, since both now live in one role's sequence.
 
 ## 5. Chapter 1–35 ownership map
 
 | ADD chapter | Primary owner | Day-one treatment |
 |---|---|---|
-| 1–8 | A00 | Read as constraints; produce contract freeze and scope guardrails. |
-| 9 | A00 | Freeze domain values, IDs, statuses, service ports, provider capability types. |
-| 10 | A01, governed by A00 | Bootstrap exact package layout; no speculative packages. |
-| 11 | A00 + A02 | A00 freezes envelope; A02 implements Claude normalization/ingestion. |
-| 12 | A01 + feature owners | A01 owns DB engine/core migration; agents own allocated migration ranges. |
-| 13 | A07 + A05 | A05 evaluates; A07 orchestrates authorization and outcome lifecycle. |
-| 14–17 | A05 | Scope, token/quota/runway baseline, risk, policy. |
-| 18 | A03 | Progress Tree and State Checkpointing. |
-| 19 | A04 | Repository Checkpoint and recovery. |
-| 20 | A06 | Graceful Pause and durable wake jobs. |
+| 1–8 | `contract-integrator` | Read as constraints; produce contract freeze and scope guardrails. |
+| 9 | `contract-integrator` | Freeze domain values, IDs, statuses, service ports, provider capability types. |
+| 10 | `foundation`, governed by `contract-integrator` | Bootstrap exact package layout; no speculative packages. |
+| 11 | `contract-integrator` + `claude-provider` | `contract-integrator` freezes envelope; `claude-provider` implements Claude normalization/ingestion. |
+| 12 | `foundation` + feature owners | `foundation` owns DB engine/core migration; each role owns its allocated migration range. |
+| 13 | `runtime` (Part B) + `predictor` | `predictor` evaluates; `runtime` orchestrates authorization and outcome lifecycle. |
+| 14–17 | `predictor` | Scope, token/quota/runway baseline, risk, policy. |
+| 18 | `checkpoint` (Part A) | Progress Tree and State Checkpointing. |
+| 19 | `checkpoint` (Part B) | Repository Checkpoint and recovery. |
+| 20 | `runtime` (Part A) | Graceful Pause and durable wake jobs. |
 | 21 | Deferred | No Codex production adapter tomorrow. Fixtures/interfaces only if needed. |
-| 22 | A02 | Claude plugin/hooks/status-line/native event normalization. |
-| 23–24 | A07 | In-process first; thin daemon/API/CLI surface. |
+| 22 | `claude-provider` | Claude plugin/hooks/status-line/native event normalization. |
+| 23–24 | `runtime` (Part B) | In-process first; thin daemon/API/CLI surface. |
 | 25 | Deferred | No VS Code implementation tomorrow. |
-| 26 | A01 | Config model and defaults needed by vertical slice only. |
-| 27 | A00 + A08 | Privacy/security constraints and tests. |
-| 28 | A07 + A08 | Typed errors, logging, recovery, doctor baseline. |
-| 29 | Every agent + A08 | Unit tests owned locally; A08 owns cross-package/E2E tests. |
-| 30 | A01 + A08 | Basic OSS files and CI; full release matrix deferred. |
-| 31–32 | A00 | Milestone acceptance and final DoD gate. |
-| 33 | A00 | ADR compliance; only A00 edits accepted ADRs. |
+| 26 | `foundation` | Config model and defaults needed by vertical slice only. |
+| 27 | `contract-integrator` + `qa` | Privacy/security constraints and tests. |
+| 28 | `runtime` (Part B) + `qa` | Typed errors, logging, recovery, doctor baseline. |
+| 29 | Every role + `qa` | Unit tests owned locally; `qa` owns cross-package/E2E tests. |
+| 30 | `foundation` + `qa` | Basic OSS files and CI; full release matrix deferred. |
+| 31–32 | `contract-integrator` | Milestone acceptance and final DoD gate. |
+| 33 | `contract-integrator` | ADR compliance; only `contract-integrator` edits accepted ADRs. |
 | 34 | All | Execution and durable-progress contract. |
-| 35 | Split by appendix | A02 owns Claude templates; A03 A/B; A04 D; A06 C; A07 F; A08 test/reference validation. |
+| 35 | Split by appendix | `claude-provider` owns Claude templates; `checkpoint` A/B/D; `runtime` C/F; `qa` test/reference validation. |
 
 ## 6. Contract-freeze gate
 
-No feature agent should invent a competing domain type. A00 must first commit `docs/implementation/day1/CONTRACT_FREEZE.md` and compileable skeletons for:
+No feature role should invent a competing domain type. `contract-integrator` must first commit `docs/implementation/day1/CONTRACT_FREEZE.md` and compileable skeletons for:
 
 - UUIDv7-style ID aliases or wrappers;
 - `Session`, `Turn`, `Task`, `ProgressNode`, `ArtifactReference`;
@@ -171,7 +175,7 @@ No feature agent should invent a competing domain type. A00 must first commit `d
 
 ## 7. Shared-file and dependency policy
 
-### Files owned only by A00
+### Files owned only by `contract-integrator`
 
 ```text
 Preflight_ADD.md
@@ -183,7 +187,7 @@ docs/adr/**
 docs/implementation/day1/CONTRACT_FREEZE.md
 ```
 
-### Files owned only by A01
+### Files owned only by `foundation`
 
 ```text
 go.mod
@@ -200,24 +204,24 @@ Taskfile.yml
 .golangci.yml
 ```
 
-No other agent edits `go.mod` or `go.sum`. Dependency requests go into its progress file for A01/A00 to apply.
+No other role edits `go.mod` or `go.sum`. Dependency requests go into its progress file for `foundation`/`contract-integrator` to apply.
 
 ### Migration allocation
 
 ```text
-0000–0009  A01 core/session/config
-0010–0019  A02 telemetry/provider events
-0020–0029  A03 progress/state checkpoints
-0030–0039  A04 repository checkpoints
-0040–0049  A05 evaluations/predictions/authorizations
-0050–0059  A06 pause/wake jobs
+0000–0009  foundation           core/session/config
+0010–0019  claude-provider      telemetry/provider events
+0020–0029  checkpoint (Part A)  progress/state checkpoints
+0030–0039  checkpoint (Part B)  repository checkpoints
+0040–0049  predictor            evaluations/predictions/authorizations
+0050–0059  runtime (Part A)     pause/wake jobs
 ```
 
-A07 does not add schema unless A00 explicitly assigns a range.
+`runtime` Part B does not add schema unless `contract-integrator` explicitly assigns a range.
 
 ### Unit-test ownership
 
-Each feature agent writes unit tests under its own package. A08 owns only:
+Each feature role writes unit tests under its own package. `qa` owns only:
 
 - `internal/integrationtest/**`;
 - `testdata/e2e/**`;
@@ -229,33 +233,35 @@ Each feature agent writes unit tests under its own package. A08 owns only:
 Recommended branches:
 
 ```bash
-git worktree add ../preflight-a00 -b day1/a00-contract
-git worktree add ../preflight-a01 -b day1/a01-foundation
-git worktree add ../preflight-a02 -b day1/a02-claude
-git worktree add ../preflight-a03 -b day1/a03-progress-state
-git worktree add ../preflight-a04 -b day1/a04-repo-checkpoint
-git worktree add ../preflight-a05 -b day1/a05-predictor-policy
-git worktree add ../preflight-a06 -b day1/a06-pause
-git worktree add ../preflight-a07 -b day1/a07-runtime-surface
-git worktree add ../preflight-a08 -b day1/a08-qa
+git worktree add ../preflight-contract-integrator -b day1/contract-integrator
+git worktree add ../preflight-foundation           -b day1/foundation
+git worktree add ../preflight-claude-provider      -b day1/claude-provider
+git worktree add ../preflight-checkpoint           -b day1/checkpoint
+git worktree add ../preflight-predictor            -b day1/predictor
+git worktree add ../preflight-runtime              -b day1/runtime
+git worktree add ../preflight-qa                   -b day1/qa
 ```
 
-A00 lands the contract commit first. Every other branch rebases onto that exact commit before writing production code.
+`contract-integrator` lands the contract commit first. Every other branch rebases onto that exact commit before writing production code.
 
 ## 9. Durable coordination artifacts
 
-Every agent owns exactly one progress artifact:
+Every role owns exactly one progress artifact:
 
 ```text
-docs/implementation/day1/A00.md
-...
-docs/implementation/day1/A08.md
+docs/implementation/day1/contract-integrator.md
+docs/implementation/day1/foundation.md
+docs/implementation/day1/claude-provider.md
+docs/implementation/day1/checkpoint.md
+docs/implementation/day1/predictor.md
+docs/implementation/day1/runtime.md
+docs/implementation/day1/qa.md
 ```
 
-After every logical node, the agent must write:
+After every logical node, the role must write:
 
 ```yaml
-node: A05-03
+node: predictor-03
 status: completed
 artifacts:
   - internal/predictor/heuristic/predictor.go
@@ -263,7 +269,7 @@ artifacts:
 validation:
   - go test ./internal/predictor/...
 commit: <sha>
-next_action: A05-04 implement policy reason codes
+next_action: predictor-04 implement policy reason codes
 assumptions: []
 blockers: []
 ```
@@ -274,15 +280,14 @@ Conversation-only progress does not count.
 
 Use this order even when implementation occurs in parallel:
 
-1. A00 contract freeze.
-2. A01 foundation/core SQLite.
-3. A02, A03, A04, A05 in any order after tests pass.
-4. A06 pause/scheduler.
-5. A07 CLI/API/orchestration.
-6. A08 CI/E2E/security tests.
-7. A00 final reconciliation and architecture review.
+1. `contract-integrator` contract freeze.
+2. `foundation` core SQLite.
+3. `claude-provider`, `checkpoint`, `predictor` in any order after tests pass.
+4. `runtime` (Part A pause/scheduler, then Part B CLI/API/orchestration).
+5. `qa` CI/E2E/security tests.
+6. `contract-integrator` final reconciliation and architecture review.
 
-A00 should cherry-pick or merge **whole reviewed commits**, not copy generated code manually.
+`contract-integrator` should cherry-pick or merge **whole reviewed commits**, not copy generated code manually.
 
 ## 11. Final day-one demo
 
@@ -362,29 +367,31 @@ Do not redesign the project or add future abstractions. Produce a severity-ranke
 file-level report, then fix only P0/P1 findings and run the complete test suite.
 ```
 
+---
 
-# Agent Packets
+# Agent Roles
 
-The full text of each agent packet lives as a standalone file under
-`agent-packets/`, so a single file can be handed to an isolated agent/worktree
-without the rest of this plan (see §3 above and `agent-packets/README.md`).
+The full text of each role definition lives as a standalone file under
+`agents/`, so a single file can be handed to an isolated agent/worktree
+without the rest of this plan (see §3 above and `agents/README.md`).
 
-**`agent-packets/0X-*.md` is the single source of truth for packet content.**
-This section is an index only — edit packet details there, not here, so the
+**`agents/*.md` is the single source of truth for role content.**
+This section is an index only — edit role details there, not here, so the
 two never drift out of sync.
 
-| Agent | Packet file | Model | Mission |
+| Role | File | Model | Mission |
 |---|---|---|---|
-| A00 | [`agent-packets/00-contract-integrator.md`](agent-packets/00-contract-integrator.md) | Fable | Freeze compile-time/persistence contracts; integrate reviewed branches at the end. |
-| A01 | [`agent-packets/01-foundation-config-sqlite.md`](agent-packets/01-foundation-config-sqlite.md) | Cheaper model; Fable for migration/recovery review | Buildable Go application foundation and the SQLite runtime every other package depends on. |
-| A02 | [`agent-packets/02-claude-telemetry-hooks.md`](agent-packets/02-claude-telemetry-hooks.md) | Fable for hook semantics; cheaper model for parsers/fixtures | Fixture-backed Claude Code hook/status-line normalization into frozen Preflight events. |
-| A03 | [`agent-packets/03-progress-state-checkpoint.md`](agent-packets/03-progress-state-checkpoint.md) | Fable | Make Progress Tree the canonical durable task state; no completion without verified artifact evidence. |
-| A04 | [`agent-packets/04-repository-checkpoint.md`](agent-packets/04-repository-checkpoint.md) | Cheaper model; Fable for path/race/security review | Capture and verify repository evidence without mutating the active branch. |
-| A05 | [`agent-packets/05-predictor-policy.md`](agent-packets/05-predictor-policy.md) | Fable | Deterministic, explainable, cold-start-safe predictor/policy/authorization loop. |
-| A06 | [`agent-packets/06-graceful-pause-scheduler.md`](agent-packets/06-graceful-pause-scheduler.md) | Fable | Provider-neutral pause/resume state machine and durable wake scheduling. |
-| A07 | [`agent-packets/07-runtime-cli-api.md`](agent-packets/07-runtime-cli-api.md) | Cheaper model; Fable for authorization/pause orchestration review | Wire frozen ports into an in-process-first app; stable CLI/JSON vertical slice. |
-| A08 | [`agent-packets/08-qa-security-ci.md`](agent-packets/08-qa-security-ci.md) | Cheaper model for fixtures/CI; Fable for final adversarial review | Objective evidence that the vertical slice is safe, restartable, idempotent, provider-compatible. |
+| contract-integrator | [`agents/contract-integrator.md`](agents/contract-integrator.md) | Fable | Freeze compile-time/persistence contracts; integrate reviewed branches at the end. |
+| foundation | [`agents/foundation.md`](agents/foundation.md) | Cheaper model; Fable for migration/recovery review | Buildable Go application foundation and the SQLite runtime every other package depends on. |
+| claude-provider | [`agents/claude-provider.md`](agents/claude-provider.md) | Fable for hook semantics; cheaper model for parsers/fixtures | Fixture-backed Claude Code hook/status-line normalization into frozen Preflight events. |
+| checkpoint | [`agents/checkpoint.md`](agents/checkpoint.md) | Fable | Progress Tree + State Checkpointing (Part A) **and** Repository Checkpoint (Part B); no completion without verified artifact evidence, and checkpoints without mutating the active branch. |
+| predictor | [`agents/predictor.md`](agents/predictor.md) | Fable | Deterministic, explainable, cold-start-safe predictor/policy/authorization loop. |
+| runtime | [`agents/runtime.md`](agents/runtime.md) | Fable for Part A (pause/scheduler); cheaper model for most of Part B (CLI/API) | Graceful Pause + durable wake scheduling (Part A) **and** CLI/API/orchestration wiring the vertical slice (Part B). |
+| qa | [`agents/qa.md`](agents/qa.md) | Cheaper model for fixtures/CI; Fable for final adversarial review | Objective evidence that the vertical slice is safe, restartable, idempotent, provider-compatible. |
 
-The contract-freeze template A00 fills in when it produces
+The contract-freeze template `contract-integrator` fills in when it produces
 `docs/implementation/day1/CONTRACT_FREEZE.md` lives at
-[`agent-packets/CONTRACT_FREEZE_TEMPLATE.md`](agent-packets/CONTRACT_FREEZE_TEMPLATE.md).
+[`agents/CONTRACT_FREEZE_TEMPLATE.md`](agents/CONTRACT_FREEZE_TEMPLATE.md).
+
+The prior numbered nine-role structure (`A00`–`A08`) is archived at
+`docs/archive/agent-packets-v1/` for historical reference only.
