@@ -70,6 +70,16 @@ type Service struct {
 	tree  TreeReader
 	clock domain.Clock
 	ids   domain.IDGenerator
+
+	// HaltAfter is checkpoint-a06's crash-injection seam (mirrors
+	// internal/progress.CompleteNode's identical HaltAfter/Phase/HaltError
+	// idiom exactly, so both halves of this role's own packages test crash
+	// windows the same way): when non-empty, Create returns a *HaltError
+	// immediately after completing the named Phase, simulating a process
+	// crash at exactly that point. Zero value (empty string) never
+	// matches any Phase, so production callers that never touch this
+	// field see no behavior change at all.
+	HaltAfter Phase
 }
 
 // NewService constructs a Service. tree supplies the Progress Tree state
@@ -77,6 +87,57 @@ type Service struct {
 // by checkpoint-a04's CompleteNode use of the identical type).
 func NewService(store *Store, tree TreeReader, clock domain.Clock, ids domain.IDGenerator) *Service {
 	return &Service{store: store, tree: tree, clock: clock, ids: ids}
+}
+
+// Phase names the distinct steps of Create's sequence, used by
+// crash-injection tests to interrupt execution at an exact point and by
+// Reconciler to describe what it found — the same vocabulary role
+// internal/progress.Phase plays for CompleteNode, scoped to this package's
+// own, narrower sequence (checkpoint-a06's assigned reconciliation gap:
+// "a05's Create writes a manifest, serializes it, and stores it — what
+// crash windows exist there specifically").
+type Phase string
+
+const (
+	// PhaseReadTree: after ListNodes/ListArtifacts return, before the
+	// manifest is assembled. A crash here leaves NOTHING durable at all —
+	// Create has not written anything yet, so this window needs no
+	// reconciliation; a retry simply starts over.
+	PhaseReadTree Phase = "read_tree"
+	// PhaseSeal: after Build/Seal/Marshal produce a fully-formed,
+	// self-checksummed manifest, before Store.Insert runs. Still nothing
+	// durable — the manifest exists only in process memory at this point.
+	PhaseSeal Phase = "seal"
+	// PhaseInsert: after Store.Insert's single INSERT statement has
+	// committed (SQLite commits a single statement atomically — there is
+	// no "partially inserted row" state to crash into), before Create
+	// returns to its caller. This is the one phase where durable state
+	// exists when the halt fires; Reconcile's job is proving that state is
+	// always a fully valid, self-consistent row, never a dangling or
+	// half-written one.
+	PhaseInsert Phase = "insert"
+)
+
+// HaltError is returned by Create when HaltAfter caused an intentional
+// mid-sequence stop, simulating a process crash at exactly that point.
+// Mirrors internal/progress.HaltError's shape so a crash-injection test
+// can assert both "Create did not proceed further" (via this type) and
+// "reconciliation finds nothing broken" (via a subsequent Reconcile call).
+type HaltError struct {
+	Phase Phase
+}
+
+func (e *HaltError) Error() string {
+	return fmt.Sprintf("statecheckpoint: Create halted after phase %q (fault injection)", e.Phase)
+}
+
+// haltIfRequested returns a *HaltError if phase matches s.HaltAfter, so
+// Create's linear sequence can check after each step with one line.
+func (s *Service) haltIfRequested(phase Phase) error {
+	if s.HaltAfter != "" && s.HaltAfter == phase {
+		return &HaltError{Phase: phase}
+	}
+	return nil
 }
 
 var _ app.StateCheckpointService = (*Service)(nil)
@@ -103,6 +164,9 @@ func (s *Service) Create(ctx context.Context, req app.CreateStateCheckpointReque
 	artifactRows, err := s.tree.ListArtifacts(ctx, req.TaskID)
 	if err != nil {
 		return domain.StateCheckpoint{}, fmt.Errorf("statecheckpoint: Create: list artifacts for task %s: %w", req.TaskID, err)
+	}
+	if err := s.haltIfRequested(PhaseReadTree); err != nil {
+		return domain.StateCheckpoint{}, err
 	}
 
 	summary := summarizeNodes(nodes)
@@ -132,6 +196,9 @@ func (s *Service) Create(ctx context.Context, req app.CreateStateCheckpointReque
 	if err != nil {
 		return domain.StateCheckpoint{}, fmt.Errorf("statecheckpoint: Create: marshal manifest for task %s: %w", req.TaskID, err)
 	}
+	if err := s.haltIfRequested(PhaseSeal); err != nil {
+		return domain.StateCheckpoint{}, err
+	}
 
 	row := Row{
 		ID:                  checkpointID,
@@ -143,6 +210,9 @@ func (s *Service) Create(ctx context.Context, req app.CreateStateCheckpointReque
 		CreatedAt:           now.UTC().Format(time.RFC3339),
 	}
 	if err := s.store.Insert(ctx, row); err != nil {
+		return domain.StateCheckpoint{}, err
+	}
+	if err := s.haltIfRequested(PhaseInsert); err != nil {
 		return domain.StateCheckpoint{}, err
 	}
 
