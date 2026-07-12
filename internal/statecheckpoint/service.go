@@ -234,6 +234,39 @@ func (s *Service) LoadLatest(ctx context.Context, taskID domain.TaskID) (domain.
 	return rowToDomain(row, manifest), nil
 }
 
+// Snapshot returns the full reconstructed State Checkpoint for one
+// specific, historical checkpoint ID — "give me the full state as of
+// checkpoint X," a point-in-time query distinct from both of this
+// package's other read APIs: LoadLatest is task-scoped (always the most
+// recent row, never a specific historical one) and Verify returns only a
+// pass/fail verdict (StateCheckpointVerification{ID, Valid}, no
+// reconstructed state at all). Snapshot is the genuine incremental gap
+// checkpoint-a08 closes on top of a05's LoadLatest/Verify: an
+// inspection/debugging/audit entry point for "what did the Progress Tree
+// look like at THIS specific semantic boundary," e.g. for a human or a
+// future CLI comparing two checkpoints, or for ADD §18.9 reconciliation
+// step 5 ("compare provider plan/task events") which needs to reason about
+// a SPECIFIC prior checkpoint, not merely the latest one.
+//
+// Like LoadLatest, Snapshot does not itself recompute or verify the
+// integrity digest (that is Verify's job, which a caller can call
+// separately against the same ID if it wants the fail-closed guarantee
+// before trusting the returned state for something consequential) — it is
+// a plain read, mirroring internal/repocheckpoint's own read/verify split
+// (Verify is a separate call from whatever reads a checkpoint's manifest
+// for inspection).
+func (s *Service) Snapshot(ctx context.Context, id domain.StateCheckpointID) (domain.StateCheckpoint, error) {
+	row, err := s.store.Get(ctx, id)
+	if err != nil {
+		return domain.StateCheckpoint{}, err
+	}
+	manifest, err := Unmarshal([]byte(row.ManifestJSON))
+	if err != nil {
+		return domain.StateCheckpoint{}, fmt.Errorf("statecheckpoint: Snapshot: unmarshal manifest for checkpoint %s: %w", row.ID, err)
+	}
+	return rowToDomain(row, manifest), nil
+}
+
 // Verify loads the checkpoint's stored manifest and recomputes its digest
 // from scratch, reporting whether it still matches the stored
 // integrity_sha256 — mirroring internal/repocheckpoint's Verify "never
