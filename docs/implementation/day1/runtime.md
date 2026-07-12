@@ -1,5 +1,13 @@
 # runtime — Progress Artifact
 
+> **Wave 5 sections appended below the Wave 4 node log** — see "Wave 5"
+> heading. Wave 5 completes six nodes in one pass: the full currently-
+> unlocked frontier for this role (`runtime-a02`, `runtime-a06`,
+> `runtime-b03`, `runtime-b04`, `runtime-b05`, `runtime-b08`). No new
+> cross-role change requests this wave; Wave 4's foundation migrate_test.go
+> change request was resolved before this wave started (confirmed: `go
+> test ./internal/storage/sqlite/...` is fully green on this branch).
+
 > **Wave 4 sections appended below the Wave 3 node log** — see "Wave 4"
 > heading. Wave 4 adds `runtime-a01` (Part A's migration range 0050-0059,
 > this role's first Part A node) and `runtime-b02` (app wiring), and
@@ -386,3 +394,434 @@ assumptions:
     runtime-b03+ scope."
 blockers: []
 ```
+
+---
+
+# Wave 5
+
+Branch: `day1/runtime`, synced from `main` (Wave 4 integration state,
+`5470e4d`) via fast-forward merge before any Wave 5 work — clean, no
+conflicts (this role only owns its own paths). Brings in
+`foundation`'s migrate_test.go range-scoped-assertion fix, `checkpoint`'s
+Part A/B core migrations (0020-0039), `predictor`'s quota forecaster
+(`internal/predictor/quota`), and `claude-provider`'s telemetry event
+store (`internal/telemetry/claude/store.go`).
+
+Assigned nodes, executed sequentially with independent validate+commit
+after each: `runtime-a02` (pause state transition validator) ->
+`runtime-a06` (durable scheduler lease) -> `runtime-b03` (Evaluate
+pipeline) -> `runtime-b04` (hook command handlers) -> `runtime-b05`
+(checkpoint create orchestration) -> `runtime-b08` (status/doctor
+commands) — Part A before Part B per the task brief, since both of
+Part A's nodes were marked High risk (state-machine and concurrency
+correctness) and Part B's four nodes are comparatively lower-risk
+plumbing built on top of runtime-b02's existing wiring container.
+
+## runtime-a02 — Pause state transition validator
+
+### What shipped
+
+- `internal/pause/doc.go` — package doc reconciling three documents'
+  state-name vocabularies onto the twelve frozen `domain.PauseStatus`
+  wire strings: agents/runtime.md's "Required state path" prose,
+  `Preflight_ADD.md` §20.5's mermaid diagram, and the frozen enum
+  itself (`internal/domain/status.go`, verified by
+  `CONTRACT_FREEZE.md`). Several of the prose documents' named steps
+  (`observing`/`Active`, `safe_point_reached`, `persisting`, `wake_due`,
+  `EmergencyInterrupt`, `MinimalCheckpoint`) fold onto one frozen state
+  each — documented explicitly rather than silently picked.
+- `internal/pause/statemachine.go` — the explicit valid-transition
+  table (P0 deliverable 1): `Event` vocabulary, `transitionTable` (every
+  edge keyed by `(from, event)`), `terminalStates`, `Validate`/`Apply`/
+  `IsTerminal`/`IsKnownState`/`ValidEvents`, and a `*TransitionError`
+  type distinguishing unknown-state / terminal-state / no-edge
+  rejections.
+- `internal/pause/statemachine_test.go` — 17 tests covering the full
+  nominal path, ADD §17.6's emergency skip-ahead, ADD §20.15's
+  checkpoint-failure fail-closed rule, and every Part A required test
+  provable at the state-machine level alone: unsafe-quota-reschedules,
+  repo-overlap-blocks, cancel-wins-race-with-wake, provider-interrupt-
+  failure-recoverable, plus terminal-state/unknown-state/invalid-edge
+  rejection and full table-completeness structural checks.
+
+### Node log
+
+```yaml
+node: runtime-a02
+status: completed
+artifacts:
+  - internal/pause/doc.go
+  - internal/pause/statemachine.go
+  - internal/pause/statemachine_test.go
+validation:
+  - "gofmt -l internal/pause   # empty"
+  - "go build ./...   # OK"
+  - "go vet ./internal/pause/...   # OK"
+  - "go test ./internal/pause/... -run StateTransition -race -v   # 17/17 PASS"
+  - "go test ./internal/pause/... -race -v   # all PASS (same 17 — StateTransition is the whole package this node)"
+commit: 7b125fc
+next_action: runtime-a06
+assumptions:
+  - "State-name reconciliation across agents/runtime.md prose, ADD
+    §20.5's diagram, and the frozen 12-value domain.PauseStatus enum —
+    documented in doc.go, not silently picked. No new PauseStatus value
+    was invented (Constitution §6 rule 4)."
+  - "Interrupting has no cancel edge (a provider interrupt signal
+    already in flight cannot be cancelled out from under itself) —
+    a deliberate narrowing, tested explicitly
+    (TestStateTransition_InterruptingHasNoCancelEdge) so a future
+    reader doesn't have to reverse-engineer the omission from the table."
+blockers: []
+```
+
+## runtime-a06 — Durable scheduler lease
+
+### What shipped
+
+- `internal/scheduler/doc.go` — package doc mapping ADD §12.4's lease-
+  claim transaction concept and §12.7's lease/retry parameters onto
+  this store's design.
+- `internal/scheduler/lease.go` — `Store` with `Schedule`/`Get`/`Claim`/
+  `Renew`/`Complete`/`Fail`/`ReclaimExpired` against the `wake_jobs`
+  table (runtime-a01's migration 0051). `Claim` reserves a single
+  physical `*sql.Conn` (not a pooled `*sql.Tx`) and issues `BEGIN
+  IMMEDIATE`/`COMMIT`/`ROLLBACK` directly on it, matching ADD §12.4's
+  literal locking intent. `Claim`'s predicate is deliberately widened
+  beyond ADD §12.4's literal `status='scheduled'` text to also match a
+  `leased` row whose lease has expired, so "expired lease reclaimed"
+  holds directly against `Claim`, not only via the separate
+  `ReclaimExpired` restart-recovery sweep (ADD §28.3 step 2, which
+  still exists for startup diagnostics).
+- `internal/scheduler/lease_test.go` — 17 tests: schedule+claim,
+  lease renewal/complete/fail-with-backoff/fail-exhausts-max-attempts
+  (each including a wrong-owner-conflict case), expired lease reclaimed
+  (via bare `Claim` and via explicit `ReclaimExpired`), validation, and
+  the two concurrency proofs required by the DAG's stated risk:
+  `TestLease_ConcurrentWorkersYieldOneClaim` (many goroutines racing one
+  job, exactly one wins) and
+  `TestLease_ConcurrentWorkersAcrossManyJobsEachClaimedOnce` (N jobs, M
+  workers, every job claimed exactly once) — both run under `-race`.
+
+### Two real bugs caught and fixed by this node's own tests, before commit
+
+1. **Self-deadlock**: `Claim`'s original implementation re-fetched the
+   newly-claimed job through the pooled `*sql.DB` (`s.Get`) while still
+   holding its own reserved `*sql.Conn` open for the transaction. Under
+   full pool saturation (many concurrent `Claim` callers,
+   `internal/storage/sqlite.DB` caps the pool at 8 connections), the
+   re-fetch's connection request could never be satisfied — every
+   goroutine ended up blocked in `database/sql`'s connection-wait queue
+   simultaneously. `TestLease_ConcurrentWorkersAcrossManyJobsEachClaimedOnce`
+   hung indefinitely on first run (had to be killed via `kill -9` after
+   ~4 minutes real time / <1s CPU time, the signature of a wait-queue
+   deadlock, not a spin). Fixed by adding a `getJob(ctx, Querier, id)`
+   helper `Claim` calls against its OWN reserved connection, before
+   `COMMIT`, instead of going back to the pool.
+2. **Expired-lease blind spot**: `Claim`'s original SELECT only matched
+   `status = 'scheduled'`, so a `leased`-but-expired row (exactly the
+   "duplicate workers / expired lease" scenario) was invisible to
+   `Claim` until a separate `ReclaimExpired` call reset it first —
+   `TestLease_ExpiredLeaseReclaimedByAnotherWorker` failed on first run
+   (`second Claim: Found = false, want true`). Fixed by widening the
+   SELECT/UPDATE predicate to also match a leased row whose
+   `lease_expires_at` has passed (see "What shipped" above).
+
+Both bugs were caught by this node's own required tests before any
+commit was made — not discovered later by a sibling role or at
+integration time.
+
+### Node log
+
+```yaml
+node: runtime-a06
+status: completed
+artifacts:
+  - internal/scheduler/doc.go
+  - internal/scheduler/lease.go
+  - internal/scheduler/lease_test.go
+validation:
+  - "gofmt -l internal/scheduler   # empty"
+  - "go build ./...   # OK"
+  - "go vet ./internal/scheduler/...   # OK"
+  - "go test ./internal/scheduler/... -run Lease -race -v   # 17/17 PASS"
+  - "go test ./internal/scheduler/... -race -count=3   # stable across 3 runs, no flakes"
+commit: d5948d9
+next_action: runtime-b03
+assumptions:
+  - "Claim's SELECT/UPDATE predicate widened beyond ADD §12.4's literal
+    text to also match expired-leased rows (not just scheduled ones) —
+    documented deviation, justified by the required test's own name
+    ('expired lease reclaimed') and by ADD §12.4 itself being labeled a
+    concept (\"概念\"), not verbatim-mandatory SQL."
+  - "wake_jobs.status values (scheduled/leased/done/dead) are this
+    package's own vocabulary, per 0051_wake_jobs.sql's header leaving
+    the column deliberately un-enumerated at the schema level for the
+    owning role (this one) to define."
+blockers: []
+```
+
+## runtime-b03 — Evaluate pipeline
+
+### What shipped
+
+- `internal/orchestrator/doc.go` — package doc scoping this node to
+  agents/runtime.md Part B pipeline steps 1-6, and explaining why no new
+  repository/worktree/session resolver port was invented (no frozen
+  port exists yet for that; `EvaluateRequest` takes already-resolved
+  IDs, the realistic shape for a hook handler or CLI command that
+  already has them).
+- `internal/orchestrator/evaluate.go` — `Evaluate(ctx, Deps,
+  EvaluateRequest) (EvaluateResult, error)`: loads the Progress Tree
+  (when a `TaskID` is given), loads usage observations via a narrow
+  local `UsageObservationLoader` interface, snapshots Git state via
+  `internal/gitx` (checkpoint role's public Git plumbing, consumed not
+  owned), calls `app.EvaluationService.EvaluateTurn` then `.Decide`.
+  Fail-open on the three operational-observation steps (Progress Tree/
+  observations/Git snapshot — degrades `EvaluateResult`'s `Has*` flags
+  without aborting); fail-closed on `EvaluateTurn`/`Decide` themselves
+  (the pipeline's actual purpose, errors propagate as-is).
+- `internal/orchestrator/evaluate_test.go` — 16 tests covering the
+  happy path (both service calls made, in order), validation, nil-
+  service fail-closed, both fail-closed propagation cases, and all
+  three fail-open degradation cases (each with its own "error still
+  degrades, doesn't abort" test plus a "value loads when present" test).
+
+### Node log
+
+```yaml
+node: runtime-b03
+status: completed
+artifacts:
+  - internal/orchestrator/doc.go
+  - internal/orchestrator/evaluate.go
+  - internal/orchestrator/evaluate_test.go
+validation:
+  - "gofmt -l internal/orchestrator   # empty"
+  - "go build ./...   # OK"
+  - "go vet ./internal/orchestrator/...   # OK"
+  - "go test ./internal/orchestrator/... -run Evaluate -race -v   # 16/16 PASS"
+commit: 38dc881
+next_action: runtime-b04
+assumptions:
+  - "No new resolver port invented for repository/worktree/session
+    resolution (Constitution §7 rule 10) — EvaluateRequest takes
+    already-resolved IDs directly; documented in doc.go."
+  - "internal/gitx (checkpoint role's Git plumbing) is consumed
+    directly as a public package, not faked — it is not one of the
+    frozen app ports this wave's fakes cover, and it already has its
+    own real, tested implementation from checkpoint's earlier waves."
+blockers: []
+```
+
+## runtime-b04 — Hook command handlers
+
+### What shipped
+
+- `internal/orchestrator/hooks.go` — `HandleStatusLine`/
+  `HandleUserPromptSubmit`/`HandleStop`/`HandleStopFailure`: each
+  parses via claude-provider-04's real, already-integrated parsers
+  (`internal/providers/claude`, `internal/hooks/claude`), normalizes via
+  claude-provider-04's real `Normalizer` (`internal/telemetry/claude`),
+  best-effort persists via an injectable, nil-safe `EventPersister`, and
+  (`HandleUserPromptSubmit` only) runs the evaluate pipeline
+  (runtime-b03's collaborators) to render ADD §22.3's block/allow
+  response shape. Every handler is fail-open on malformed stdin.
+- `internal/orchestrator/hooks_test.go` — 16 tests against the real
+  fixture files under `testdata/provider-events/claude/**`, including
+  `TestHookHandlers_UserPromptSubmit_NeverSeesRawPromptText`, which
+  asserts the hash `EvaluateTurn` receives is a 64-char hex digest, not
+  the fixture's raw prompt text.
+- `internal/cli/hook.go` — added exported `NewHookClaudeCmd(HookDeps)`,
+  the real command tree, alongside the existing package-private stub
+  tree (renamed `newHookClaudeCmd` -> `newHookClaudeStubCmd`, still used
+  by standalone `NewRootCmd()`).
+- `internal/app/wiring/wiring.go` — `RootCmd()` now replaces the stub
+  `hook` subtree with `NewHookClaudeCmd`'s real one, built from a new
+  optional `Services.Hooks` field (`HookSupport`: `Clock`/`IDs`/
+  `Persister`/`TxRunner`) that falls back to real `domain.Clock`/
+  `domain.IDGenerator` when left unset.
+
+### Node log
+
+```yaml
+node: runtime-b04
+status: completed
+artifacts:
+  - internal/orchestrator/hooks.go
+  - internal/orchestrator/hooks_test.go
+  - internal/cli/hook.go (modified)
+  - internal/app/wiring/wiring.go (modified)
+  - internal/app/wiring/wiring_test.go (modified)
+validation:
+  - "gofmt -l internal/orchestrator internal/cli internal/app/wiring   # empty"
+  - "go build ./...   # OK"
+  - "go vet ./internal/orchestrator/... ./internal/cli/... ./internal/app/wiring/...   # OK"
+  - "go test ./internal/orchestrator/... -run HookHandlers -race -v   # 16/16 PASS"
+  - "go test ./internal/cli/... ./internal/app/wiring/... -race   # all PASS"
+commit: 624b27a
+next_action: runtime-b05
+assumptions:
+  - "claude-provider-04's parsers/Normalizer are called directly (real,
+    not faked), per the task brief's explicit instruction that they are
+    already integrated."
+  - "HookDeps.Evaluation is app.EvaluationService (fake this wave, see
+    Fakes Used section below) — same dependency runtime-b03 already
+    tracks, not a new gap."
+  - "ADD §22.6's status-line compose-with-previous-command installer
+    mechanism is out of scope this wave — HandleStatusLine
+    normalizes+persists only; no internal/statusline package exists
+    yet to own the composition step."
+blockers: []
+```
+
+## runtime-b05 — Checkpoint create orchestration
+
+### What shipped
+
+- `internal/orchestrator/checkpoint.go` — `CheckpointCreate(ctx, Deps,
+  Request) (Result, error)`: calls `app.StateCheckpointService.Create`
+  THEN `app.RepositoryCheckpointService.Create`, in that order, never
+  the reverse. Fails closed on either nil dependency (checked up front,
+  before any call) and propagates either service's error as-is; a State
+  failure means Repository is never even attempted.
+- `internal/orchestrator/checkpoint_test.go` — 6 tests, the two most
+  important being `TestCheckpointCreate_CallsStateBeforeRepository`
+  (records actual call order through both fakes) and
+  `TestCheckpointCreate_StateFailureNeverCallsRepository` (proves
+  Repository is never reached at all when State fails — not called-
+  then-ignored, never reached).
+- `internal/cli/checkpoint.go` — `NewCheckpointCmd(CheckpointCreateDeps)`,
+  reading `--task-id`/`--worktree-id` flags (no resolver port exists,
+  same documented scope boundary as runtime-b03).
+- `internal/app/wiring/wiring.go` — added a `replaceSubcommand` helper
+  (refactored out of runtime-b04's inline hook-subtree-replacement loop
+  so both nodes share one mechanism) and wired `checkpoint` through it.
+
+### Node log
+
+```yaml
+node: runtime-b05
+status: completed
+artifacts:
+  - internal/orchestrator/checkpoint.go
+  - internal/orchestrator/checkpoint_test.go
+  - internal/cli/checkpoint.go
+  - internal/app/wiring/wiring.go (modified)
+  - internal/app/wiring/wiring_test.go (modified)
+validation:
+  - "gofmt -l internal/orchestrator internal/cli internal/app/wiring   # empty"
+  - "go build ./...   # OK"
+  - "go vet ./internal/orchestrator/... ./internal/cli/... ./internal/app/wiring/...   # OK"
+  - "go test ./internal/orchestrator/... -run CheckpointCreate -race -v   # 6/6 PASS"
+  - "go test ./internal/cli/... ./internal/app/wiring/... ./internal/orchestrator/... -race   # all PASS"
+commit: aa7130e
+next_action: runtime-b08
+assumptions:
+  - "Both StateCheckpoint and RepositoryCheckpoint wired against fakes
+    this wave (checkpoint-a04/b04 not integrated yet, per the task
+    brief's explicit instruction to use fakes for both regardless of
+    checkpoint-b04's in-progress sibling-branch status this wave)."
+blockers: []
+```
+
+## runtime-b08 — Status/Doctor commands
+
+### What shipped
+
+- `internal/orchestrator/diagnostics.go` — `Status(ctx, StatusDeps,
+  StatusRequest) (StatusResult, error)`: best-effort session/Progress-
+  Tree summary, fail-open on a missing/failing ProgressTree dependency.
+  No pause-status field: the frozen `GracefulPauseService` port has no
+  passive read query (only state-transition actions), so a read command
+  must not call one just to render a summary. `Doctor(ctx, DoctorDeps)
+  DoctorResult`: DB reachable (`Conn().PingContext`) + migrated
+  (`CurrentVersion > 0`), config loadable (narrow `ConfigLoader`
+  interface), required directories present+writable (probed via a
+  create-then-remove temp file, verified to leave no residue). Every
+  check is independently optional (`CheckSkipped` when unwired); overall
+  `Healthy` is false only if some check actually `CheckFail`s.
+- `internal/orchestrator/diagnostics_test.go` — 12 tests, including
+  `TestDoctor_DoesNotMutateFilesystem` (directory entry count unchanged
+  before/after a Doctor run) and a real, migrated `*sqlite.DB` test
+  proving the DB check's OK path against the actual embedded migration
+  set, not just a fake.
+- `internal/cli/diagnostics.go` — `NewStatusCmd`/`NewDoctorCmd`, both
+  always exiting 0 with a stable schema-versioned JSON body regardless
+  of whether individual checks failed (a failing doctor check is
+  content in the report, not a command-execution error).
+- `internal/app/wiring/wiring.go` — added `Services.Diagnostics`
+  (`DiagnosticsSupport`: `DB`/`Config`/`RequiredDirs`, all optional) and
+  wired both commands through `replaceSubcommand`. `*sqlite.DB`
+  satisfies `orchestrator.DBPinger` structurally with no new dependency
+  from `orchestrator` onto the `sqlite` package (verified via a
+  throwaway compile-time assertion during development, not committed).
+
+### Node log
+
+```yaml
+node: runtime-b08
+status: completed
+artifacts:
+  - internal/orchestrator/diagnostics.go
+  - internal/orchestrator/diagnostics_test.go
+  - internal/cli/diagnostics.go
+  - internal/cli/diagnostics_test.go
+  - internal/app/wiring/wiring.go (modified)
+  - internal/app/wiring/wiring_test.go (modified)
+validation:
+  - "gofmt -l internal/orchestrator internal/cli internal/app/wiring   # empty"
+  - "go build ./...   # OK"
+  - "go vet ./internal/orchestrator/... ./internal/cli/... ./internal/app/wiring/...   # OK"
+  - "go test ./internal/cli/... -run 'Status|Doctor' -race -v   # 6/6 PASS"
+  - "go test ./internal/orchestrator/... ./internal/cli/... ./internal/app/wiring/... -race   # all PASS"
+commit: deaf094
+next_action: none — all six Wave 5 nodes complete; runtime-a03/a04/a05/a07/a08/a09/a10/a11/b06/b07/b09/b10 remain, out of scope this wave
+assumptions:
+  - "No fakes tracked for follow-up on this node: DBPinger/ConfigLoader
+    are narrow interfaces this node owns outright, satisfied directly
+    by *sqlite.DB and (once wiring supplies one) a real config loader —
+    no sibling-role service dependency to swap later."
+blockers: []
+```
+
+## Post-node whole-repo lint sweep
+
+After all six nodes, `golangci-lint run ./...` found 11 issues, all in
+this wave's own new files (errcheck x1, errorlint x5, nilerr x3,
+staticcheck x1, unused x1). Fixed all 11 in a dedicated commit
+(`90078c3`) separate from the six node commits, per the same
+never-batch-unrelated-work discipline — this commit is cleanup of
+already-committed work, not a seventh node. `golangci-lint run ./...`
+now reports 0 issues, whole repo; `go test ./... -race` is fully green
+across every package, including `internal/storage/sqlite` (confirming
+Wave 4's foundation migrate_test.go change request was resolved before
+this wave began, as the task brief stated).
+
+## Fakes used this wave (tracked for integration)
+
+Every one of these was explicitly authorized by the task brief as a
+soft/fake-able dependency for this wave; each is called out here so a
+later integration pass can find every place that still needs a real
+implementation swapped in.
+
+| Node | Fake used in place of | Where |
+|---|---|---|
+| runtime-b03 | `predictor-08`/`predictor-09` (Policy/Evaluation persistence) — `app.EvaluationService` | `internal/orchestrator/evaluate.go`'s `Deps.Evaluation`, wired to `fakes.FakeEvaluationService` in tests and (until predictor lands) in `wiring` |
+| runtime-b04 | Same `app.EvaluationService` fake (UserPromptSubmit's block/allow decision) | `internal/orchestrator/hooks.go`'s `HookDeps.Evaluation` |
+| runtime-b05 | `checkpoint-a04` (real `CompleteNode`/state-checkpoint atomic protocol) — `app.StateCheckpointService` | `internal/orchestrator/checkpoint.go`'s `Deps.StateCheckpoint` |
+| runtime-b05 | `checkpoint-b04` (repository checkpoint; being built this same wave by a sibling teammate, not yet merged) — `app.RepositoryCheckpointService` | `internal/orchestrator/checkpoint.go`'s `Deps.RepositoryCheckpoint` |
+
+Explicitly NOT fake this wave, per the task brief and verified directly
+in this artifact's node logs:
+
+- `claude-provider-04`'s hook payload parsers and Normalizer (`internal/
+  providers/claude`, `internal/hooks/claude`, `internal/telemetry/
+  claude`) — real, already integrated (Wave 2), called directly by
+  `runtime-b04`'s hook handlers.
+- `internal/gitx` (checkpoint role's Git plumbing, consumed by
+  `runtime-b03`'s Evaluate pipeline) — real, already integrated.
+- `runtime-a02`/`runtime-a06` (Part A) have no sibling-role
+  dependencies at all — both are pure, self-contained state-machine/
+  storage-layer nodes with nothing to fake.
+- `runtime-b08`'s `DBPinger`/`ConfigLoader` — narrow interfaces this
+  node owns outright; nothing to fake.
