@@ -197,3 +197,24 @@ node. No test behavior/intent changed; `gofmt`, `go build`, `go vet`,
 `go test ./internal/hooks/claude/... ./internal/providers/claude/... -race`,
 and `golangci-lint run ./internal/hooks/claude/... ./internal/providers/claude/...`
 (0 issues) all pass after the fix.
+
+## Corrective note (post-Wave-2 lint pass, round 3)
+
+One remaining instance of the same errorlint pattern (direct
+`err.(*domain.Error)` type assertion instead of `errors.As`) was found at
+`internal/hooks/claude/userpromptsubmit_test.go:206`, in
+`TestEncodeUserPromptSubmitResponse_UnknownDecision`, not covered by round 1
+or round 2. Fixed the same way: `derr, ok := err.(*domain.Error)` / `if !ok
+|| derr.Code != domain.ErrCodeValidation` became `var derr *domain.Error` /
+`if !errors.As(err, &derr) || derr.Code != domain.ErrCodeValidation`.
+`"errors"` was already imported in this file (added during round 2), so no
+import change was needed.
+
+Unlike rounds 1 and 2, this round's authoritative check was a repo-wide
+grep (`grep -rn '\.(\*domain\.Error)' --include="*.go" .`) rather than relying
+on golangci-lint alone, to positively confirm no further instances of this
+pattern remain anywhere in the repository. The grep returned no output after
+the fix. `gofmt`, `go build`, `go vet`,
+`go test ./internal/hooks/claude/... -race`, and `golangci-lint run
+./internal/hooks/claude/... ./internal/providers/claude/...` (0 issues) all
+pass after the fix.
