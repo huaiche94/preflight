@@ -76,3 +76,18 @@ blockers:
 
 Final commit for checkpoint-b03: `0281b97` (code + docs), with this SHA
 recorded in a follow-up commit, same pattern as Wave 1's `9b222d0`/`94be461`.
+
+## Corrective commit (cross-role lint finding, not a new DAG node)
+
+A full-tree integration lint pass (golangci-lint, errorlint) over the merged
+Wave 2 tree flagged one issue in checkpoint-owned code:
+`internal/gitx/resolver_test.go:128` used a direct type assertion
+(`err.(*domain.Error)`) inside the `asDomainError` helper, which would fail on
+wrapped errors. The helper now delegates to `errors.As`, preserving the exact
+same test assertions on the unwrapped `*domain.Error` fields.
+
+Validation re-run and green: `gofmt -l internal/gitx` (empty),
+`go build ./internal/gitx/...`, `go vet ./internal/gitx/...`,
+`go test ./internal/gitx/... -race`. golangci-lint is not installed in this
+environment, so that specific check was skipped; the underlying pattern was
+fixed per errorlint's rule. No other files touched; no DAG node started.
