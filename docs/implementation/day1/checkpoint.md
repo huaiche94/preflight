@@ -61,7 +61,7 @@ validation:
   - "go test ./internal/gitx/... -run Fingerprint -v     # PASS, all subtests green (DAG validation command)"
   - "go test ./internal/gitx/... -race                   # PASS, full existing suite unchanged (no regressions)"
   - "go build ./... && go vet ./...                      # whole-repo build/vet unaffected"
-commit: (recorded post-commit; see final line of this entry)
+commit: 0281b97
 next_action: checkpoint-b04 (Repository Checkpoint create/verify) is now unblocked on the b03 side but still gated on checkpoint-b01 (migrations 0030-0039, itself gated on foundation-06) — not started this wave, per assignment
 assumptions:
   - "Digest scope: covers FingerprintSchema, WorktreeRoot, CommonDir, IsLinkedWorktree, HeadOID, Branch, UntrackedPolicy, sorted status Entries, and sorted index/worktree numstat. Upstream/Ahead/Behind are carried as informational fields but deliberately EXCLUDED from the digest: they move on `git fetch` (remote-tracking refs), which does not change the local worktree/index/HEAD state that FR-149 resume validation protects — a background fetch must not invalidate a resume. If checkpoint-b04 or runtime needs remote-divergence in the identity, that is an additive schema bump (preflight.gitx.fingerprint.v2), not a breaking change."
@@ -74,6 +74,5 @@ blockers:
   - "checkpoint-a01, checkpoint-b01 still blocked on foundation-06; checkpoint-b04 additionally on checkpoint-b01. None started this wave, per explicit assignment."
 ```
 
-Final commit for checkpoint-b03: recorded in the commit message trailer of the
-commit containing this entry (the entry and code land atomically, so the SHA
-cannot be embedded in itself; verify with `git log --oneline -1 -- internal/gitx/fingerprint.go`).
+Final commit for checkpoint-b03: `0281b97` (code + docs), with this SHA
+recorded in a follow-up commit, same pattern as Wave 1's `9b222d0`/`94be461`.
