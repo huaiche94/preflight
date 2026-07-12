@@ -1,7 +1,7 @@
 # Preflight Day-1 Contract Freeze
 
 Status: **ACCEPTED** — Bootstrap stage, executed by the lead directly (see `CONSTITUTION.md` amendment pending re: Bootstrap-as-lead-only-prerequisite, approved by repository owner 2026-07-12).
-Contract commit: `<to be filled in by the lead's Bootstrap commit SHA>`
+Contract commit: `4262b4b`
 Go module: `github.com/huaiche94/preflight`
 Schema baseline: `preflight.event.v1` / `preflight.progress-tree.v1` / `preflight.state-checkpoint.v1` / `preflight.repository-checkpoint.v1` / `preflight.pause.v1` / `preflight.api.v1`
 
