@@ -128,7 +128,7 @@ validation:
   - "go test ./internal/cli/... -race -v   # all PASS"
   - "go build -o <tmp> ./cmd/preflight && <tmp> --help   # OK (existing version-only binary; unaffected by this package)"
   - "golangci-lint run ./...   # 0 issues, whole repo"
-commit: <see final report>
+commit: a6a3eaa
 next_action: runtime-b02 (App wiring) — blocked/not started this wave per explicit instruction to stop once runtime-b01 is Validated; Part A (internal/pause/**, internal/scheduler/**) also not started this wave, out of scope per task brief
 assumptions:
   - "Kebab-case for `preflight hook claude ...` subcommands — see the
