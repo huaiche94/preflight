@@ -9,11 +9,10 @@ gracefully pause, or block that turn.
 It answers a different question than checkpoint/resume/memory tools do:
 not "how do we continue?" but **"should we even start this turn?"**
 
-> **Project status: Day-1 vertical slice in progress (Wave 2 of 9).**
-> Bootstrap (Stage-0 contract freeze) and Wave 1 are integrated on `main`;
-> Wave 2 is implemented on the per-role branches and undergoing
-> integration and post-wave analysis. See the
-> [Day-1 wave roadmap](#day-1-wave-roadmap) below and
+> **Project status: Day-1 vertical slice in progress (Wave 4 of 9, integrated).**
+> Bootstrap (Stage-0 contract freeze) and Waves 1-4 are integrated on
+> `main`; Wave 5 is being re-derived from the DAG's current dependency
+> edges. See the [Day-1 wave roadmap](#day-1-wave-roadmap) below and
 > `docs/implementation/day1/EXECUTION_DAG.md` for task-level status.
 > Milestone gating per `Preflight_ADD.md` §31 still applies.
 
@@ -65,7 +64,7 @@ planning) and must respect the DAG's stage and dependency order.
 | Wave 1 | foundation-01 · claude-provider-01/02/03 · checkpoint-b02 · predictor-02/03/04 | ✅ Integrated (`3fb37ce`) |
 | Wave 2 | foundation-02/03/04(reduced)/05/09 · claude-provider-04/06 · checkpoint-b03 · predictor-05/06 | ✅ Integrated (`528b6ad`) |
 | Wave 3 | foundation-06/08 · predictor-05b · runtime-b01 · qa-01/08 (ADR-041 Token Forecaster; first-ever nodes for **runtime** and **qa**, unassigned since Wave 1/Bootstrap respectively) | ✅ Integrated (`ca7062f`) |
-| Wave 4 | foundation-07 · claude-provider-05 · checkpoint-a01/b01 · predictor-01/05c · runtime-a01/b02 | 🔄 In progress — foundation-06 unlocked this whole wave; qa correctly idle (nothing of its remaining scope unlocked yet) |
+| Wave 4 | foundation-07 · claude-provider-05 · checkpoint-a01/b01 · predictor-01/05c · runtime-a01/b02 | ✅ Integrated (`a0b10f2`) — includes a corrective fix to `migrate_test.go`'s hardcoded migration-count assertions, confirmed necessary by 5 independent cross-role reports before any sibling role's migrations could coexist with foundation's in one tree |
 | Wave 5 | claude-provider-07 · checkpoint-a02/a03/b04 · predictor-05d(if any)/07 | Planned — re-derived from the DAG once Wave 4 lands, not fixed in advance |
 | Wave 6 | checkpoint-a04→a05/a07→a06/a08→a09 · checkpoint-b05/b06→b07→b08→b09 | Planned — contains checkpoint-a04, the single highest-risk task in the DAG |
 | Wave 7 | runtime-a02→a03/a04→a05 · runtime-a06→a07 · runtime-b03/b04/b05/b08 | Planned — Stage 3 continuation |
