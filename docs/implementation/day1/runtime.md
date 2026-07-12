@@ -295,3 +295,94 @@ blockers:
     command, but blocks a fully green `go test ./...` until foundation's
     3-line fix lands."
 ```
+
+## runtime-b02 — App wiring (in-process composition layer)
+
+### What shipped
+
+- `internal/app/wiring/wiring.go` — the composition container:
+  `Services` (one field per frozen service interface: `Evaluation`,
+  `ProgressTree`, `StateCheckpoint`, `GracefulPause`,
+  `RepositoryCheckpoint` — `internal/app/ports.go`), `New(Services)
+  (*App, error)` (fail-closed construction: any nil field returns the
+  frozen `domain.Error` with `ErrCodeValidation`, `Retryable: false`, and
+  `Details["missing_services"]` naming every hole — a composition bug
+  surfaces at startup, not as a nil-pointer panic in whichever handler
+  first hits it), one accessor per service, and `App.RootCmd()` — the
+  wiring→CLI seam that returns `internal/cli.NewRootCmd()`'s tree today
+  and is where runtime-b03+ threads real services into individual command
+  handlers.
+- `internal/testutil/fakes/` — first population of this directory
+  (agents/runtime.md: "coordinate with the qa role"): `doc.go`
+  (pattern contract), `unconfigured.go` (shared nil-Func behavior), and
+  one file per frozen service interface (`evaluation.go`,
+  `progresstree.go`, `statecheckpoint.go`, `gracefulpause.go`,
+  `repositorycheckpoint.go`). Pattern: `Fake<Interface>` struct with one
+  optional `<Method>Func` field per method; compile-time
+  `var _ app.X = (*FakeX)(nil)` assertions; calling an unconfigured
+  method fails loud with `domain.Error{Code: ErrCodeUnavailable,
+  Retryable: false, Details: {fake, method}}` rather than silently
+  returning zero values. No call recording/counting machinery — tests
+  needing it build it in their own closures (Constitution §7 rule 10:
+  no abstractions this milestone doesn't need).
+- `internal/app/wiring/wiring_test.go` — validates: construction with
+  all-fakes succeeds; each single missing service fails closed with the
+  right code/retryability/details; all-missing lists all five; accessors
+  return the injected instances (identity); calls through the container
+  reach the configured fake closure with arguments intact (pass-through
+  plumbing, no re-interpretation); unconfigured fake methods fail loud
+  through the container; `RootCmd()` yields the full 13-top-level-command
+  P0 tree from runtime-b01.
+
+### Handoff notes
+
+- **For qa**: `internal/testutil/fakes` is intentionally minimal and
+  additive-friendly. If integration tests need recording fakes, add
+  behavior in test-local closures first; only promote shared machinery
+  into this package if several suites independently need the same thing.
+- **For contract-integrator/foundation (root wiring)**: the intended
+  binary composition is `wiring.New(Services{...real impls...})` followed
+  by `app.RootCmd()`. `cmd/preflight/main.go` remains untouched by this
+  role per agents/runtime.md.
+- **For runtime-b03+ (this role)**: replace `RootCmd`'s direct
+  `cli.NewRootCmd()` call by passing `a.services`' interfaces into the
+  cli constructors as they gain real handlers; callers that already go
+  through `App.RootCmd()` see no change.
+
+### Node log
+
+```yaml
+node: runtime-b02
+status: completed
+artifacts:
+  - internal/app/wiring/wiring.go
+  - internal/app/wiring/wiring_test.go
+  - internal/testutil/fakes/doc.go
+  - internal/testutil/fakes/unconfigured.go
+  - internal/testutil/fakes/evaluation.go
+  - internal/testutil/fakes/progresstree.go
+  - internal/testutil/fakes/statecheckpoint.go
+  - internal/testutil/fakes/gracefulpause.go
+  - internal/testutil/fakes/repositorycheckpoint.go
+validation:
+  - "go test ./internal/app/wiring/...   # all PASS (DAG validation command)"
+  - "go test ./internal/cli/... ./internal/app/wiring/... -race   # all PASS"
+  - "gofmt -l internal/app/wiring internal/testutil   # empty"
+  - "go vet ./internal/app/wiring/... ./internal/testutil/...   # OK"
+  - "golangci-lint run ./...   # 0 issues, whole repo"
+next_action: runtime-b03+ (real handler logic) and runtime-a02 (pause state machine) — NOT this wave, per explicit scope
+assumptions:
+  - "TxRunner and the ADR-041 predictor pipeline stages
+    (ScopeEstimator/TokenForecaster/QuotaForecaster/RiskCombiner) are NOT
+    fields of wiring.Services yet: the CLI's P0 commands consume the five
+    high-level services only; pipeline stages are wired inside predictor's
+    own EvaluationService implementation, and storage transactions are a
+    per-service concern. Adding a field later is additive and
+    non-breaking; adding it now would be speculative structure
+    (Constitution §7 rule 10)."
+  - "App.RootCmd() returning the still-stubbed runtime-b01 tree is the
+    correct b02 shape: the DAG's validation command tests wiring
+    construction, not handler behavior, and handler logic is explicitly
+    runtime-b03+ scope."
+blockers: []
+```
