@@ -75,7 +75,7 @@ validation:
   - "go build ./internal/paths/..."
   - "go vet ./internal/paths/..."
   - "go test ./internal/paths/...   # PASS, 10 test cases"
-commit: pending (recorded after commit; see git log for foundation-02)
+commit: 2820015
 next_action: foundation-03 (YAML config load and precedence)
 assumptions:
   - "internal/paths resolves only the GLOBAL, non-repository-local
