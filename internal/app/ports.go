@@ -36,7 +36,7 @@ type Evaluation struct {
 	CreatedAt   time.Time
 	Calibrated  bool
 	Confidence  domain.Confidence
-	ReasonCodes []string
+	ReasonCodes []domain.ReasonCode
 }
 
 type DecideRequest struct {
@@ -86,6 +86,79 @@ type EvaluationService interface {
 	GetEvaluation(ctx context.Context, id domain.EvaluationID) (Evaluation, error)
 	Decide(ctx context.Context, req DecideRequest) (DecisionResult, error)
 	ConsumeAuthorization(ctx context.Context, req ConsumeAuthorizationRequest) (Authorization, error)
+}
+
+// --- Predictor pipeline ports (ADR-041) -------------------------------------
+//
+// Scope Estimator -> Token Forecaster -> Quota Forecaster -> Risk Combiner
+// -> Policy. Runway Predictor (see GracefulPauseService.Observe) is
+// independent of this chain — it answers a different question (is a quota
+// limit imminent within a short horizon) using a live burn-rate model
+// (ADD §15.4-15.5), not the per-turn forecast produced here.
+//
+// Each stage is a narrow, swappable interface: a Rule/Statistical/ML
+// implementation of any one stage can replace it without touching the
+// others (ADD §1.4; Preflight_Predictor_Design_Supplement.md's
+// Version 1/2/3 evolutionary roadmap).
+
+type EstimateScopeRequest struct {
+	SessionID    domain.SessionID
+	TaskID       *domain.TaskID
+	RepositoryID domain.RepositoryID
+}
+
+// ScopeEstimator is the pipeline's Stage 1: predicts what work a turn will
+// require (ADD §14).
+type ScopeEstimator interface {
+	EstimateScope(ctx context.Context, req EstimateScopeRequest) (domain.ScopeEstimate, error)
+}
+
+type ForecastTokensRequest struct {
+	SessionID domain.SessionID
+	Scope     domain.ScopeEstimate
+}
+
+// TokenForecaster is the pipeline's Stage 2: predicts total token cost of
+// the upcoming turn from its scope estimate (ADD §15.1-15.2).
+type TokenForecaster interface {
+	ForecastTokens(ctx context.Context, req ForecastTokensRequest) (domain.TokenForecast, error)
+}
+
+type ForecastQuotaRequest struct {
+	SessionID     domain.SessionID
+	TokenForecast domain.TokenForecast
+	Quota         []domain.QuotaObservation
+	Context       domain.ContextObservation
+}
+
+// QuotaForecaster is the pipeline's Stage 3: projects provider-quota and
+// context-window position after the upcoming turn (ADD §15.3, §15.9). MAY
+// use TokenForecast as a fallback input when the provider does not expose
+// quota percentage directly; MUST NOT require it when the provider does.
+type QuotaForecaster interface {
+	ForecastQuota(ctx context.Context, req ForecastQuotaRequest) (domain.QuotaForecast, error)
+}
+
+type CombineRiskRequest struct {
+	Scope         domain.ScopeEstimate
+	TokenForecast domain.TokenForecast
+	QuotaForecast domain.QuotaForecast
+}
+
+type CombineRiskResult struct {
+	QuotaRisk       domain.RiskComponent
+	ContextRisk     domain.RiskComponent
+	CompletionRisk  domain.RiskComponent
+	BlastRadiusRisk domain.RiskComponent
+	OverallRisk     domain.RiskComponent
+}
+
+// RiskCombiner is the pipeline's Stage 4: combines scope, token forecast,
+// and quota forecast into the four named risk components plus an overall
+// score (ADD §16.1-16.2). Does not consume RunwayForecast — see the
+// package-level comment above.
+type RiskCombiner interface {
+	Combine(ctx context.Context, req CombineRiskRequest) (CombineRiskResult, error)
 }
 
 // --- Progress Tree DTOs -----------------------------------------------------

@@ -83,6 +83,50 @@ Fail-open vs fail-closed (Constitution §immutable-day-one-rule-10, from the Day
 
 `runtime` Part B does not get a range; it does not add schema unless `contract-integrator` explicitly assigns one (`Preflight_Day1_Parallel_Execution_Plan.md` §7).
 
+## Predictor pipeline ports (ADR-041)
+
+Frozen 2026-07-12, amending the original Bootstrap contract. Full rationale:
+`docs/adr/0041-predictor-forecast-layer.md`.
+
+Four new narrow interfaces in `internal/app/ports.go`, each a distinct
+pipeline stage, none implemented yet (contract only):
+
+```text
+ScopeEstimator.EstimateScope   -> domain.ScopeEstimate    (ADD §14)
+TokenForecaster.ForecastTokens -> domain.TokenForecast     (ADD §15.1-15.2)
+QuotaForecaster.ForecastQuota  -> domain.QuotaForecast     (ADD §15.3, §15.9)
+RiskCombiner.Combine           -> CombineRiskResult        (ADD §16.1-16.2)
+```
+
+Pipeline order: Scope Estimator → Token Forecaster → Quota Forecaster →
+Risk Combiner → Policy. **`GracefulPauseService.Observe` (Runway
+Forecaster) is independent of this chain** — it is not a `RiskCombiner`
+input and `RiskCombiner` is not one of its inputs. This was a real error
+in the original Bootstrap-era DAG (`predictor-07` depended on
+`predictor-06`); ADR-041 corrects it.
+
+New frozen types in `internal/domain/forecast.go`: `ScopeEstimate` (mirrors
+ADD §14.1's field set exactly, pointer-typed numeric fields per the
+unknown-is-not-zero rule below), `TokenForecast` (`TokensP50/P80/P90`),
+`QuotaForecast` (`ProjectedQuotaUsedP90`, `ProjectedContextUsedP90` — both
+projections in one type since they share a delta-projection technique and
+both feed `RiskCombiner`), `RiskComponent` (`Score`, `Calibrated`,
+`Confidence`, `ReasonCodes`), `DataQuality`. `ReasonCode` is now a typed
+`string` enum backed by the ADD §16.4 constant list — `Evaluation.ReasonCodes`
+changed from `[]string` to `[]domain.ReasonCode` (safe: no Wave 1 code
+constructed or consumed that field).
+
+Terminology: `Preflight_Predictor_Design_Supplement.md` calls the third
+risk term "execution_risk"; the frozen contract keeps ADD §16.1's existing
+name, `completion_risk` — same concept, one name, per Constitution §1.
+
+Cold-start: `QuotaForecaster` implementations MAY produce a
+deterministic current-observation-plus-default-delta estimate
+(`Calibrated: false`, `Confidence: ConfidenceLow`) before durable
+historical telemetry exists — same discipline already established for
+`predictor-04`/`predictor-08`. This is not a stub to be later thrown away;
+it is the correct first implementation under this frozen shape.
+
 ## Frozen state transitions
 
 Enum sources (all in `internal/domain/status.go`, wire strings verified by `internal/domain/status_test.go`):

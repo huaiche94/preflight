@@ -284,6 +284,12 @@ type PreflightDecision struct {
 }
 ```
 
+`ScopeEstimate`、`TokenForecast`、`QuotaForecast`、`RiskComponent`、
+`DataQuality`、`ReasonCode` 現已在 `internal/domain` 凍結為具體 Go type
+（ADR-041）。`TokenForecast` 與 `QuotaForecast` 由獨立的 pipeline stage
+產生，位於 Scope Estimator 與 Risk Combiner 之間；`Runway` 維持獨立，不
+是 Risk Combiner 的輸入（見 §7.3、§9.9、§15、§16 的對應更新）。
+
 Actions：
 
 ```text
@@ -766,6 +772,11 @@ flowchart TB
 
 ## 7.3 C4 Level 3：Evaluation Components
 
+> ADR-041：Token Estimator 拆分為 Token Forecaster 與 Quota Forecaster 兩個
+> 獨立 stage；Runway Forecaster 從此 pipeline 移除（它從未是 Risk Combiner
+> 的有效輸入），改為獨立元件，直接餵給 §7.4 Continuity Components 的
+> `Runway Hazard Monitor`（HAZ），與本圖不再共用同一條線。
+
 ```mermaid
 flowchart LR
     REQ[Evaluate request]
@@ -777,8 +788,8 @@ flowchart LR
     TREE[Progress Tree Query]
     FEATURE[Feature Pipeline]
     SCOPE[Scope Estimator]
-    TOK[Token Estimator]
-    RUNWAY[Runway Forecaster]
+    TOKFC[Token Forecaster]
+    QFC[Quota Forecaster]
     RISK[Risk Combiner]
     POL[Policy Evaluator]
     DEC[Decision Store]
@@ -795,12 +806,21 @@ flowchart LR
     HIST --> FEATURE
     TREE --> FEATURE
     FEATURE --> SCOPE
-    SCOPE --> TOK
-    TOK --> RUNWAY
-    RUNWAY --> RISK
+    SCOPE --> TOKFC
+    TOKFC --> QFC
+    QUOTA --> QFC
+    CTX --> QFC
+    SCOPE --> RISK
+    QFC --> RISK
     RISK --> POL
     POL --> DEC
 ```
+
+Runway Forecaster（10 分鐘 quota-exhaustion hazard，§15.4-15.5）不出現在
+此圖：它消費 live burn rate，不消費 Token/Quota Forecast，且不是 Risk
+Combiner 的輸入。它的即時、持續性質已在 §7.4 的 `Runway Hazard Monitor`
+正確建模；Policy Evaluator 直接、獨立地消費兩者的輸出（Risk Combiner 的
+結果，以及 Runway 的 hit-probability），而不是透過 Risk Combiner 傳遞。
 
 ## 7.4 C4 Level 3：Continuity Components
 
@@ -1213,7 +1233,34 @@ type EvaluationService interface {
     Decide(context.Context, DecideRequest) (DecisionResult, error)
     ConsumeAuthorization(context.Context, ConsumeAuthorizationRequest) (Authorization, error)
 }
+```
 
+### Predictor pipeline ports（ADR-041）
+
+Scope Estimator → Token Forecaster → Quota Forecaster → Risk Combiner →
+Policy。Runway Predictor（見 `GracefulPauseService.Observe`）獨立於此
+pipeline，不消費 Token/Quota Forecast。每個 stage 都是窄介面，可獨立替換
+Rule／Statistical／ML 實作（§1.4；`Preflight_Predictor_Design_Supplement.md`）。
+
+```go
+type ScopeEstimator interface {
+    EstimateScope(context.Context, EstimateScopeRequest) (ScopeEstimate, error)
+}
+
+type TokenForecaster interface {
+    ForecastTokens(context.Context, ForecastTokensRequest) (TokenForecast, error)
+}
+
+type QuotaForecaster interface {
+    ForecastQuota(context.Context, ForecastQuotaRequest) (QuotaForecast, error)
+}
+
+type RiskCombiner interface {
+    Combine(context.Context, CombineRiskRequest) (CombineRiskResult, error)
+}
+```
+
+```go
 type ProgressTreeService interface {
     CreateTask(context.Context, CreateTaskRequest) (Task, error)
     UpsertPlan(context.Context, UpsertPlanRequest) (ProgressTree, error)
@@ -2368,6 +2415,14 @@ ceil(ASCII alphanumeric / 4.0)
 
 # 15. Token、Quota 與 Runway Prediction
 
+> ADR-041：本章描述三個獨立 pipeline stage，凍結為 `internal/app/ports.go`
+> 的獨立介面：§15.1-15.2（Token predictor）→ `TokenForecaster`；§15.3、
+> §15.9（quota delta model、context projection）→ `QuotaForecaster`（兩者
+> 合併成單一 `domain.QuotaForecast`，因為使用相同的 delta-projection
+> 技術，且都是 Risk Combiner 的輸入）；§15.4-15.5（live burn rate、10 分鐘
+> runway probability）→ `GracefulPauseService.Observe`，維持獨立，不消費
+> Token/Quota Forecast，也不是 Risk Combiner 的輸入。
+
 ## 15.1 Token decomposition
 
 ```text
@@ -2567,6 +2622,16 @@ Net growth 不等於 total tokens，因 provider cache/compaction。以 same-ses
 ---
 
 # 16. Risk Model
+
+> ADR-041：`RiskCombiner`（`internal/app/ports.go`）凍結本章的組合邏輯。
+> 輸入為 `ScopeEstimate`、`TokenForecast`、`QuotaForecast`；quota_risk／
+> context_risk 使用 `QuotaForecast` 的 projected_quota_p90／
+> projected_context_p90（§15.3、§15.9），completion_risk／blast_radius_risk
+> 直接使用 `ScopeEstimate` 的信號。**不消費 `RunwayForecast`**——10 分鐘
+> runway hit-probability 是獨立輸入，直接供 Policy 使用（§17），不經過
+> Risk Combiner。`Preflight_Predictor_Design_Supplement.md` 使用
+> "execution_risk" 一詞描述與本章 completion_risk 相同的概念；本文件保留
+> completion_risk 作為凍結名稱，避免同一概念有兩個名稱。
 
 ## 16.1 Components
 
@@ -5710,6 +5775,19 @@ Document chapter必須實體化並驗證。
 ## ADR-040 — OS wake is out of scope
 
 Preflight 在 OS/daemon 下一次 active 時處理 overdue jobs，不喚醒關機機器。
+
+## ADR-041 — Predictor pipeline gets an explicit Forecast layer
+
+**Decision：** Scope Estimator 與 Risk Combiner 之間插入獨立的 Token
+Forecaster、Quota Forecaster stage（`TokenForecast`、`QuotaForecast` 現為
+`internal/domain` 具體 type）。Runway Forecaster 維持獨立，不是 Risk
+Combiner 的輸入。四個新窄介面凍結於 `internal/app/ports.go`：
+`ScopeEstimator`、`TokenForecaster`、`QuotaForecaster`、`RiskCombiner`。
+
+**Consequence：** §7.3 C4 diagram、§9.9 service contracts、§15、§16 同步更新；
+Day-1 execution DAG 新增 `predictor-05b`（Token Forecaster）、`predictor-05c`
+（Quota Forecaster），並修正 `predictor-07`／`predictor-08`／`predictor-11`
+的 dependency edges。詳見 `docs/adr/0041-predictor-forecast-layer.md`。
 
 ---
 

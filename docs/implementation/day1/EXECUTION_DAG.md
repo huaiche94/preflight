@@ -4,9 +4,10 @@
 |---|---|
 | Source | `Preflight_ADD.md` + `Preflight_Day1_Parallel_Execution_Plan.md` + `agents/*.md` (canonical per those docs) |
 | Scope | Full task-level breakdown of the Day-1 seven-role vertical slice |
-| Status | **Proposed — not yet approved. No teammates created. No code written.** |
-| Supersedes | The earlier nine-role (`A00`–`A08`) version of this document, archived in git history at commit `f1d9065` and referenced from `docs/archive/agent-packets-v1/`. Same underlying 82 tasks + 1 final integration; relabeled and regrouped under the 7-role structure, no scope change. |
-| Generated | 2026-07-12 (regenerated same day after the `agents/` restructuring) |
+| Status | **Wave 1 integrated (`main` @ `3fb37ce`). Amended 2026-07-12 per ADR-041 (predictor forecast layer) before Wave 2 implementation begins.** |
+| Supersedes | The earlier nine-role (`A00`–`A08`) version of this document, archived in git history at commit `f1d9065` and referenced from `docs/archive/agent-packets-v1/`. |
+| Amendments | `docs/adr/0041-predictor-forecast-layer.md` — inserted `predictor-05b`/`predictor-05c`, corrected `predictor-07`/`predictor-08`/`predictor-11` dependency edges. See §5 Summary for the resulting task-count delta. |
+| Generated | 2026-07-12 (regenerated after the `agents/` restructuring; amended same day per ADR-041) |
 
 ---
 
@@ -133,12 +134,14 @@ final integration).
 | predictor-03 | contract-integrator-02 | M | 300 | 5 | `go test ./internal/features/... -run Classifier` | 2 | Low | None |
 | predictor-04 | contract-integrator-07 | M | 250 | 4 | `go test ./internal/predictor/... -run QuantileMonotonic` | 2 | Medium — property tests must hold for all inputs, including degenerate ones | None |
 | predictor-05 | predictor-03, predictor-04 | M | 300 | 4 | `go test ./internal/predictor/... -run Scope` | 2 | Low | None |
+| predictor-05b **(new, ADR-041)** | predictor-05 | L | 400 | 4 | `go test ./internal/predictor/... -run TokenForecast` | 2 | High — feeds `RiskCombiner`'s quota/context risk terms; a systematic bias here propagates into every downstream policy decision | None |
+| predictor-05c **(new, ADR-041)** | predictor-05b | M | 300 | 4 | `go test ./internal/predictor/... -run QuotaForecast` | 2 | Medium — cold-start deterministic estimate acceptable this wave; full empirical calibration needs `claude-provider-05`/`foundation-06` (later wave) | None |
 | predictor-06 | predictor-04 | L | 350 | 4 | `go test ./internal/predictor/runway/...` | 2 | High — consumed directly by `runtime` Part A Observe; a bad score risks false pause triggers | None |
-| predictor-07 | predictor-05, predictor-06 | L | 400 | 5 | `go test ./internal/predictor/... -run RiskComponents` | 2 | Medium | None |
-| predictor-08 | predictor-07 | L | 400 | 5 | `go test ./internal/policy/... -run ColdStart` | 2 | **High — must never label an uncalibrated score a probability** | Constitution §6/§7 invariant; any violation blocks merge |
+| predictor-07 | predictor-05, predictor-05c **(was: predictor-05, predictor-06 — corrected, ADR-041)** | L | 400 | 5 | `go test ./internal/predictor/... -run RiskComponents` | 2 | Medium | None |
+| predictor-08 | predictor-07, predictor-06 **(was: predictor-07 only — corrected, ADR-041: Policy consumes Runway directly)** | L | 400 | 5 | `go test ./internal/policy/... -run ColdStart` | 2 | **High — must never label an uncalibrated score a probability** | Constitution §6/§7 invariant; any violation blocks merge |
 | predictor-09 | predictor-01, predictor-08 | M | 300 | 4 | `go test ./internal/evaluation/...` | 2 | Medium | Path must match contract-integrator's frozen layout |
 | predictor-10 | predictor-09 | M | 350 | 4 | `go test ./internal/evaluation/... -run Authorization` | 2 | High — replay protection is a security control | Consumed by `runtime` Part A resume validation and Part B decision allow/deny |
-| predictor-11 | predictor-08, predictor-10 | L | 450 | 8 | `go test ./internal/predictor/... ./internal/policy/... ./internal/evaluation/... -race -bench=. -benchmem` | 2 | High — includes fail-open/fail-closed policy-priority tests | Gate for `qa-02` E2E test |
+| predictor-11 | predictor-08, predictor-10, predictor-05b, predictor-05c **(extended, ADR-041)** | L | 450 | 8 | `go test ./internal/predictor/... ./internal/policy/... ./internal/evaluation/... -race -bench=. -benchmem` | 2 | High — includes fail-open/fail-closed policy-priority tests | Gate for `qa-02` E2E test |
 
 ### runtime — Part A: Graceful Pause & Durable Scheduler (Stage 3)
 
@@ -274,6 +277,8 @@ flowchart TD
         p03["predictor-03 Feature DTOs + classifier"]
         p04["predictor-04 Empirical quantile utils"]
         p05["predictor-05 Scope estimator"]
+        p05b["predictor-05b Token Forecaster (ADR-041)"]
+        p05c["predictor-05c Quota Forecaster (ADR-041)"]
         p06["predictor-06 Runway score"]
         p07["predictor-07 Risk combiner"]
         p08["predictor-08 Policy engine"]
@@ -282,9 +287,11 @@ flowchart TD
         p11["predictor-11 Required tests + benchmarks"]
         p03 & p04 --> p05
         p04 --> p06
-        p05 & p06 --> p07 --> p08
+        p05 --> p05b --> p05c
+        p05 & p05c --> p07
+        p07 & p06 --> p08
         p01 & p08 --> p09 --> p10
-        p08 & p10 --> p11
+        p08 & p10 & p05b & p05c --> p11
     end
 
     subgraph S3A["Stage 3 — runtime (Part A: Pause + Scheduler)"]
@@ -384,6 +391,13 @@ dependency on `runtime-a04`/`runtime-a06` is drawn **solid** — under the
 9-role structure this was soft (cross-role); under the 7-role structure
 it's the same role's own branch, so it's a real sequencing dependency now.*
 
+**ADR-041 note:** `predictor-05b` (Token Forecaster) and `predictor-05c`
+(Quota Forecaster) are new nodes inserted between `predictor-05` (Scope
+Estimator) and `predictor-07` (Risk Combiner). `predictor-07`'s dependency
+on `predictor-06` (Runway) is removed — Runway was never a valid input to
+risk combination; it feeds `predictor-08` (Policy) directly instead,
+alongside `predictor-07`'s output. See `docs/adr/0041-predictor-forecast-layer.md`.
+
 ---
 
 ## 4. Topologically sorted execution list
@@ -420,38 +434,40 @@ it's the same role's own branch, so it's a real sequencing dependency now.*
 *predictor:*
 20. predictor-01, -02, -03, -04 *(parallel)*
 21. predictor-05, -06 *(parallel)*
-22. predictor-07
-23. predictor-08
-24. predictor-09
-25. predictor-10
-26. predictor-11
+22. predictor-05b **(new, ADR-041 — Token Forecaster)**
+23. predictor-05c **(new, ADR-041 — Quota Forecaster)**
+24. predictor-07 *(now depends on predictor-05, predictor-05c — not predictor-06)*
+25. predictor-08 *(now also depends on predictor-06, in addition to predictor-07)*
+26. predictor-09
+27. predictor-10
+28. predictor-11 *(now also depends on predictor-05b, predictor-05c)*
 
 **Stage 3 — runtime (Part A then Part B, same role; Part A leads):**
-27. runtime-a01
-28. runtime-a02
-29. runtime-a03, runtime-a04 *(parallel)*
-30. runtime-a05
-31. runtime-a06
-32. runtime-a07, runtime-a08 *(parallel)*
-33. runtime-a09, runtime-a10 *(parallel)*
-34. runtime-a11
-35. runtime-b01 *(can start as early as Stage 0/1 gate — parallel with Part A, not blocked by it)*
-36. runtime-b02
-37. runtime-b03, runtime-b04, runtime-b05, runtime-b08 *(parallel)*
-38. runtime-b06
-39. runtime-b07 *(needs runtime-a04 and runtime-a06 — cannot start before those two)*
-40. runtime-b09
-41. runtime-b10
+29. runtime-a01
+30. runtime-a02
+31. runtime-a03, runtime-a04 *(parallel)*
+32. runtime-a05
+33. runtime-a06
+34. runtime-a07, runtime-a08 *(parallel)*
+35. runtime-a09, runtime-a10 *(parallel)*
+36. runtime-a11
+37. runtime-b01 *(can start as early as Stage 0/1 gate — parallel with Part A, not blocked by it)*
+38. runtime-b02
+39. runtime-b03, runtime-b04, runtime-b05, runtime-b08 *(parallel)*
+40. runtime-b06
+41. runtime-b07 *(needs runtime-a04 and runtime-a06 — cannot start before those two)*
+42. runtime-b09
+43. runtime-b10
 
 **Stage 4 — qa:**
-42. qa-01, qa-08 *(can start immediately after contract-integrator-07/foundation-09 — do not wait for Stage 2-3)*
-43. qa-03, qa-04 *(after foundation-07/claude-provider-05/checkpoint-a07/runtime-b10)*
-44. qa-05, qa-06, qa-07 *(after claude-provider-07/checkpoint-b06/checkpoint-b09/runtime-a09)*
-45. qa-02 *(last — needs every feature role's Required-Tests task green)*
-46. qa-09
+44. qa-01, qa-08 *(can start immediately after contract-integrator-07/foundation-09 — do not wait for Stage 2-3)*
+45. qa-03, qa-04 *(after foundation-07/claude-provider-05/checkpoint-a07/runtime-b10)*
+46. qa-05, qa-06, qa-07 *(after claude-provider-07/checkpoint-b06/checkpoint-b09/runtime-a09)*
+47. qa-02 *(last — needs every feature role's Required-Tests task green)*
+48. qa-09
 
 **Stage 5 — contract-integrator final integration:**
-47. contract-integrator-final
+49. contract-integrator-final
 
 ---
 
@@ -459,15 +475,16 @@ it's the same role's own branch, so it's a real sequencing dependency now.*
 
 | Metric | Value |
 |---|---|
-| Total tasks | 82 (+ 1 final integration) — **unchanged from the 9-role version** |
-| Estimated total LOC (impl + test, all tasks) | ≈ 23,850 — **unchanged** |
-| Estimated total new files | ≈ 359 — **unchanged** |
-| Roles | 7 (was 9) |
-| Stage 2 parallel branches | 3 (was 4) |
-| Largest single role by task count | `runtime`, 21 tasks (Part A 11 + Part B 10) |
-| Approximate end-to-end critical path (task count, Stage 0→5, worst single branch) | ≈ 7 (contract-integrator) + 9 (foundation) + 11 (predictor's own chain, longest of the three Stage-2 roles) + 21 (runtime, both parts) + 9 (qa) + 1 (final) ≈ 58 — same order of magnitude as before; consolidating `runtime`'s two parts sequentially doesn't shorten the critical path, it was already effectively sequential across the old Stage 3→4 boundary |
-| Tasks flagged **High** risk | 24 |
+| Total tasks | 84 (+ 1 final integration) — **+2 from ADR-041** (`predictor-05b`, `predictor-05c`) |
+| Estimated total LOC (impl + test, all tasks) | ≈ 24,550 — **+700** (400 + 300 for the two new nodes) |
+| Estimated total new files | ≈ 367 — **+8** (4 files each for `predictor-05b`/`predictor-05c`) |
+| Roles | 7 |
+| Stage 2 parallel branches | 3 |
+| Largest single role by task count | `runtime`, 21 tasks (Part A 11 + Part B 10) — `predictor` is now second-largest at 13 (was 11) |
+| Approximate end-to-end critical path (task count, Stage 0→5, worst single branch) | ≈ 60 (+2 from ADR-041's two new sequential predictor nodes; same order of magnitude, `runtime`'s 21-task chain remains the longer of the two Stage-2-origin paths) |
+| Tasks flagged **High** risk | 25 (+1: `predictor-05b`, since a systematic token-forecast bias propagates into every downstream risk/policy decision) |
 | Newly-hardened dependency (was soft, now hard) | `runtime-b07` on `runtime-a04`/`runtime-a06` — same-role dependencies no longer need a fake |
+| Corrected dependency edges (ADR-041) | `predictor-07`: `predictor-06` removed as a dependency (was never a valid `RiskCombiner` input); `predictor-08`: `predictor-06` added as a dependency (Policy consumes Runway directly); `predictor-11`: extended to cover the two new nodes |
 
 **Single highest-risk task in the whole DAG (unchanged):** `checkpoint-a04`
 (CompleteNode atomic protocol) — sole enforcement point for "completed
