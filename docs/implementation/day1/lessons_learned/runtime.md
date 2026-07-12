@@ -157,3 +157,34 @@
   table) is deliberately left open for a later integration node rather than silently resolved,
   consistent with this role's established practice of documenting rather than hiding known
   incompleteness.
+
+# Lessons Learned — runtime (Wave 8: runtime-a08)
+
+| task_id | estimated_complexity | actual_complexity | estimated_files_changed | actual_files_changed | estimated_duration | actual_duration | unexpected_dependencies | unexpected_files | blockers_encountered | token_waste_observations | recommendations_for_preflight |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| runtime-a08 | L (DAG: 350 points, ~3h) | L — estimate held; the four checks themselves were each individually simple, but designing the repository-fingerprint check's own narrow seam (not a direct dependency on internal/gitx, mirroring safepoint.go's existing CheckpointPersister/Interrupter precedent) and getting the fail-closed error-vs-CheckResult split right took real design iteration | 2 (implied) | 2 (resumevalidation.go, resumevalidation_test.go) | 350 points | one continuous pass, with one real self-caught design inconsistency mid-node (see below) | None — app.RepositoryCheckpointService.Verify and app.EvaluationService.ConsumeAuthorization's frozen signatures were exactly sufficient; internal/domain.ReasonRepositoryChangedDuringSleep (already a frozen ReasonCode) was reused by citation, not duplicated, for the repo-overlap detail string | None beyond the 2-file estimate | None external — one internal design bug, caught by this node's own test suite before commit (see below) | An early draft's package doc claimed ValidateResume "stops at the first erroring checker" for ANY checker error, but the actual implementation (correctly) converts a downstream read failure into a failing CheckResult with an _UNAVAILABLE reason code rather than a Go error — the doc comment and the code disagreed. TestResumeValidation_ValidateResume_StopsAtFirstErroringDependency (written to match the STALE doc claim) failed against the correct code; re-reading what the code actually did (report a reason code, keep running later checks) rather than reflexively "fixing" the code to match the first draft's doc comment was the right call, and the test was rewritten to assert the actual, better behavior instead | When a node's own design doc comment and its own test disagree with the implementation, treat that as a signal to re-derive WHICH one is actually correct against the task's stated goals (here: "the last line before unattended code execution" implies fail-closed, but says nothing about which Go-level mechanism — error vs. typed result — should carry that failure; a typed CheckResult reason code is strictly MORE useful for an audit trail than an opaque error), rather than mechanically making the code match whichever was written first. Recommend stating this two-channel distinction (dependency-composition-bug errors vs. typed-result check failures) explicitly in agents/runtime.md for any future validation-gate-shaped node, since it is a design decision, not an implementation detail, and this node had to work it out from Constitution §6 (fail-closed, not fail-open, for state-integrity boundaries) applied together with the audit-trail requirement 0052_resume_attempts.sql's own schema implies (failure_code column) |
+
+## Wave 8 cross-node observations
+
+- This is the smallest-surface node this role has shipped by file count (2 files) despite its High
+  risk rating and L size — consistent with the pattern that a pure-logic node with no cross-role
+  fake wiring or CLI/wiring plumbing (this node touches neither `internal/orchestrator` nor
+  `internal/cli`, unlike most of this role's Part B nodes) lands close to its point estimate without
+  the file-count inflation Wave 5/7's lessons_learned flagged for orchestrator+CLI+wiring-shaped
+  nodes.
+- The one real lesson of the wave was catching a doc-comment/test/implementation three-way
+  disagreement before commit, not after: writing the required test literally from the task brief's
+  own required-test list ("unsafe quota reschedules," "repo overlap blocks," "unrelated repo change
+  follows configured policy") first surfaced that an early doc-comment claim about error-vs-
+  CheckResult handling did not match what the code (correctly) did, and fixing the DOC and the
+  MISALIGNED TEST — not the already-correct code — was the right resolution once traced back to
+  first principles (Constitution §6 fail-closed + the audit-trail schema's own failure_code column).
+- Every dependency this node used was already real and mergeable (checkpoint-b04's
+  RepositoryCheckpointService, integrated since Wave 5) except the one explicitly named as a fake in
+  the task brief (predictor-10's authorization-hardening pass, a concurrent sibling this same wave)
+  — no undeclared fake was needed anywhere in this node.
+- No new ADRs, no change-request escalations, and no frozen-contract questions this wave. This
+  node's three new narrow seams (QuotaSnapshotReader, RepoFingerprintReader,
+  SessionCapabilityReader) are all package-local to internal/pause, following the same
+  narrowest-seam-this-node-needs discipline established by safepoint.go/persistphase.go in earlier
+  waves — none of them widen internal/app/ports.go, which remains untouched by this role.

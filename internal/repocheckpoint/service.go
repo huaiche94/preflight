@@ -140,17 +140,66 @@ func (s *Service) Verify(ctx context.Context, id domain.RepositoryCheckpointID) 
 	}, nil
 }
 
-// Restore is out of this node's scope (see the type doc comment above) —
-// real restore is ADD §19.6's stretch goal, dry-run restore is
-// checkpoint-b08's DAG node. Returning ErrCodeUnavailable here (rather than
-// a panic or a silent no-op) keeps the frozen interface fully implemented
-// while making the gap explicit to any caller, per Constitution §7 rule 3
-// ("capability gaps are surfaced explicitly, never silently assumed
-// away") applied to an internal capability, not just a provider one.
-func (s *Service) Restore(_ context.Context, req app.RestoreRepositoryCheckpointRequest) (app.RestoreResult, error) {
-	return app.RestoreResult{}, &domain.Error{
-		Code:      domain.ErrCodeUnavailable,
-		Message:   fmt.Sprintf("repocheckpoint: Restore is not implemented (checkpoint %s); real restore is checkpoint-b08's dry-run scope and a later stretch goal per ADD §19.6", req.ID),
-		Retryable: false,
+// Restore implements checkpoint-b08's dry-run scope: it evaluates whether
+// restoring req.ID's checkpoint onto its worktree's CURRENT state would
+// succeed (restoredryrun.go's full ADD §19.6 check sequence), but never
+// mutates the working tree, index, or refs — actual restore-that-mutates
+// remains explicitly out of Day-1 scope (this node's own DAG risk note:
+// "actual restore is stretch/deferred"), so RestoreResult.Applied is
+// always false here, whether or not the dry-run would have succeeded.
+//
+// Mapping the dry-run's rich report onto the frozen, narrow
+// RestoreResult{ID, Applied} shape (this role cannot add fields to it —
+// ports.go is contract-integrator-owned): a dry-run that finds no problems
+// returns RestoreResult{ID, Applied:false}, nil — a successful dry-run,
+// nothing applied because dry-run never applies. A dry-run that finds one
+// or more problems (ADD §19.6's own checksum/identity/dirty-target/
+// apply-check failures) returns a non-nil ErrCodeConflict error instead of
+// a bare false-y success, with every problem joined into Message and
+// individually available in Details (frozen domain.Error shape,
+// CONTRACT_FREEZE.md) — a caller gets actionable diagnostics without a new
+// type this role is not permitted to add to the frozen contract.
+// AllowDirty, when true, downgrades a dirty-target finding from a
+// problem to an informational note (ADD §19.6: "reject dirty target
+// UNLESS safety checkpoint/force" — AllowDirty is this request's `force`).
+func (s *Service) Restore(ctx context.Context, req app.RestoreRepositoryCheckpointRequest) (app.RestoreResult, error) {
+	row, err := s.store.Get(ctx, req.ID)
+	if err != nil {
+		return app.RestoreResult{}, err
 	}
+
+	loc, err := s.resolveWorktree(ctx, row.WorktreeID)
+	if err != nil {
+		return app.RestoreResult{}, fmt.Errorf("repocheckpoint: Restore: resolve worktree %s: %w", row.WorktreeID, err)
+	}
+
+	report, err := RestoreDryRun(ctx, s.git, row, loc.Path, loc.RepositoryID)
+	if err != nil {
+		return app.RestoreResult{}, err
+	}
+
+	// RestoreDryRun's own Problems never includes the dirty-target check
+	// (it has no AllowDirty policy input) — this is the one place that
+	// check's ADD §19.6 "unless safety checkpoint/force" condition is
+	// actually applied: a dirty target is a problem UNLESS req.AllowDirty
+	// says otherwise.
+	problems := append([]string{}, report.Problems...)
+	if report.WorktreeDirty && !req.AllowDirty {
+		problems = append(problems, fmt.Sprintf("worktree is dirty (%d path(s) changed) and AllowDirty was not set", len(report.WorktreeDirtyPaths)))
+	}
+
+	if len(problems) > 0 {
+		details := make(map[string]string, len(problems))
+		for i, p := range problems {
+			details[fmt.Sprintf("problem_%d", i)] = p
+		}
+		return app.RestoreResult{ID: req.ID, Applied: false}, &domain.Error{
+			Code:      domain.ErrCodeConflict,
+			Message:   fmt.Sprintf("repocheckpoint: Restore dry-run for checkpoint %s found %d problem(s) that would prevent a real restore: %v", req.ID, len(problems), problems),
+			Retryable: false,
+			Details:   details,
+		}
+	}
+
+	return app.RestoreResult{ID: req.ID, Applied: false}, nil
 }

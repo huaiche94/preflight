@@ -1,7 +1,11 @@
 package gitx
 
 import (
+	"bytes"
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 // DiffPatch runs a binary-safe `git diff --binary --full-index --no-ext-diff`
@@ -35,6 +39,72 @@ func (c *Client) DiffPatch(ctx context.Context, worktreeDir string, cached bool)
 		return nil, gitExitError("git diff --binary", res)
 	}
 	return res.Stdout, nil
+}
+
+// ApplyCheckResult is ApplyCheck's outcome: whether patch would apply
+// cleanly against worktreeDir's current index/working tree, and Git's own
+// diagnostic text when it would not (e.g. which hunk/file failed and why —
+// surfaced verbatim so a restore dry-run report can show the operator
+// exactly what Git itself found, never a paraphrase this package might get
+// wrong).
+type ApplyCheckResult struct {
+	WouldApply bool
+	Detail     string
+}
+
+// ApplyCheck runs `git apply --check` against patch (a binary-safe patch of
+// the shape Client.DiffPatch produces) in worktreeDir, WITHOUT applying it
+// — `--check` is documented by Git as verifying the patch applies cleanly
+// while making no changes to the index or working tree, exactly the
+// read-only guarantee a restore dry-run (ADD §19.6) needs: "verify checksum;
+// ... git apply --check; staged/unstaged separately; ... produce report."
+//
+// patch is written to a private temporary file first (domain.ProcessRunner
+// has no stdin parameter — argv-only process calls, Constitution §7 rule
+// 5 — so `git apply --check <path>` is the only way to hand Git the patch
+// content without building a shell pipeline) and removed again before this
+// function returns, success or failure; the temp file is created with
+// os.CreateTemp under worktreeDir's own OS temp directory (not inside the
+// worktree itself, so it can never be mistaken for a real untracked file by
+// a concurrent `git status`).
+//
+// An empty patch (no changes in that scope — DiffPatch's own documented
+// "not an error" case) trivially "would apply": there is nothing to apply,
+// so ApplyCheck returns WouldApply:true without invoking Git at all.
+func (c *Client) ApplyCheck(ctx context.Context, worktreeDir string, patch []byte, cached bool) (ApplyCheckResult, error) {
+	if len(bytes.TrimSpace(patch)) == 0 {
+		return ApplyCheckResult{WouldApply: true, Detail: "empty patch: nothing to apply"}, nil
+	}
+
+	f, err := os.CreateTemp("", "preflight-restore-dryrun-*.patch")
+	if err != nil {
+		return ApplyCheckResult{}, err
+	}
+	patchPath := f.Name()
+	defer func() { _ = os.Remove(patchPath) }()
+
+	if _, err := f.Write(patch); err != nil {
+		_ = f.Close()
+		return ApplyCheckResult{}, err
+	}
+	if err := f.Close(); err != nil {
+		return ApplyCheckResult{}, err
+	}
+
+	args := []string{"apply", "--check", "--binary"}
+	if cached {
+		args = append(args, "--cached")
+	}
+	args = append(args, filepath.ToSlash(patchPath))
+
+	res, err := c.run(ctx, worktreeDir, args...)
+	if err != nil {
+		return ApplyCheckResult{}, err
+	}
+	if res.ExitCode != 0 {
+		return ApplyCheckResult{WouldApply: false, Detail: strings.TrimSpace(string(res.Stderr))}, nil
+	}
+	return ApplyCheckResult{WouldApply: true}, nil
 }
 
 // ListUntracked runs `git ls-files --others --exclude-standard -z` in

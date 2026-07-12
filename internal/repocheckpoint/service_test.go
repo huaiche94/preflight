@@ -84,20 +84,27 @@ func TestService_Create_UnknownWorktree_Errors(t *testing.T) {
 	}
 }
 
-func TestService_Restore_NotImplemented(t *testing.T) {
+// TestService_Restore_UnknownCheckpoint_NotFound proves Restore's first
+// step (loading the checkpoint row) fails closed with the frozen not-found
+// contract for an ID that was never created — checkpoint-b08 replaced the
+// old blanket ErrCodeUnavailable stub with a real dry-run implementation
+// (see restoredryrun_test.go for the dry-run behavior itself); a
+// nonexistent checkpoint ID is simply not found, the same as Verify's own
+// unknown-ID behavior.
+func TestService_Restore_UnknownCheckpoint_NotFound(t *testing.T) {
 	rb := newRepoBuilder(t)
 	svc, _ := newTestService(t, "worktree-1", rb)
 
 	_, err := svc.Restore(context.Background(), app.RestoreRepositoryCheckpointRequest{ID: "cp-1"})
 	if err == nil {
-		t.Fatal("expected Restore to return an explicit not-implemented error")
+		t.Fatal("expected Restore to return an error for an unknown checkpoint ID")
 	}
 	var domErr *domain.Error
 	if !errors.As(err, &domErr) {
 		t.Fatalf("expected *domain.Error, got %T", err)
 	}
-	if domErr.Code != domain.ErrCodeUnavailable {
-		t.Fatalf("expected ErrCodeUnavailable, got %s", domErr.Code)
+	if domErr.Code != domain.ErrCodeNotFound {
+		t.Fatalf("expected ErrCodeNotFound, got %s", domErr.Code)
 	}
 }
 
