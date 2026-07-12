@@ -163,16 +163,38 @@ func (a *App) RootCmd() *cobra.Command {
 		hookDeps.IDs = idgen.New()
 	}
 
+	replaceSubcommand(root, "hook", func(short string) *cobra.Command {
+		newHook := &cobra.Command{Use: "hook", Short: short}
+		newHook.AddCommand(cli.NewHookClaudeCmd(hookDeps))
+		return newHook
+	})
+
+	checkpointDeps := orchestrator.CheckpointCreateDeps{
+		StateCheckpoint:      a.services.StateCheckpoint,
+		RepositoryCheckpoint: a.services.RepositoryCheckpoint,
+	}
+	replaceSubcommand(root, "checkpoint", func(_ string) *cobra.Command {
+		return cli.NewCheckpointCmd(checkpointDeps)
+	})
+
+	return root
+}
+
+// replaceSubcommand removes root's top-level subcommand named name (a
+// no-op if none matches) and adds the command built builds returns in its
+// place. build receives the removed command's Short text so a replacement
+// can preserve it without repeating the string in two files
+// (internal/cli's stub and this wiring). Centralizes the
+// find-remove-rebuild-add pattern every runtime-b0N node that swaps a stub
+// subtree for a real one needs, so each node's RootCmd change is a single
+// call rather than a hand-rolled loop.
+func replaceSubcommand(root *cobra.Command, name string, build func(short string) *cobra.Command) {
 	for _, sub := range root.Commands() {
-		if sub.Name() != "hook" {
+		if sub.Name() != name {
 			continue
 		}
 		root.RemoveCommand(sub)
-		newHook := &cobra.Command{Use: "hook", Short: sub.Short}
-		newHook.AddCommand(cli.NewHookClaudeCmd(hookDeps))
-		root.AddCommand(newHook)
-		break
+		root.AddCommand(build(sub.Short))
+		return
 	}
-
-	return root
 }

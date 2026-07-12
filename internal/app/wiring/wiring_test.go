@@ -308,3 +308,54 @@ func TestApp_RootCmd_HookClaudeMalformedInputStillProducesValidJSON(t *testing.T
 		t.Fatalf("stdout is not valid JSON on malformed input: %v (output: %q)", jsonErr, out.String())
 	}
 }
+
+// TestApp_RootCmd_CheckpointCreateIsRealNotStub proves runtime-b05's
+// wiring: `preflight checkpoint create` on the App-built tree calls
+// through to the injected StateCheckpoint/RepositoryCheckpoint fakes (in
+// state-then-repository order) and renders a real JSON result, not
+// internal/cli.NewRootCmd()'s standalone ErrCodeUnavailable stub.
+func TestApp_RootCmd_CheckpointCreateIsRealNotStub(t *testing.T) {
+	var callOrder []string
+	services := fullFakeServices()
+	services.StateCheckpoint = &fakes.FakeStateCheckpointService{
+		CreateFunc: func(_ context.Context, req app.CreateStateCheckpointRequest) (domain.StateCheckpoint, error) {
+			callOrder = append(callOrder, "state")
+			return domain.StateCheckpoint{ID: "sc-1", TaskID: req.TaskID}, nil
+		},
+	}
+	services.RepositoryCheckpoint = &fakes.FakeRepositoryCheckpointService{
+		CreateFunc: func(_ context.Context, _ app.CreateRepositoryCheckpointRequest) (app.RepositoryCheckpoint, error) {
+			callOrder = append(callOrder, "repository")
+			return app.RepositoryCheckpoint{ID: "rc-1", GitHead: "cafef00d"}, nil
+		},
+	}
+
+	a, err := wiring.New(services)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	root := a.RootCmd()
+	root.SetArgs([]string{"checkpoint", "create", "--task-id", "task-1", "--worktree-id", "wt-1"})
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("checkpoint create: %v (want the real handler to succeed, not the stub's ErrCodeUnavailable)", err)
+	}
+	if len(callOrder) != 2 || callOrder[0] != "state" || callOrder[1] != "repository" {
+		t.Fatalf("call order = %v, want [state, repository] end-to-end through the wired CLI command", callOrder)
+	}
+
+	var decoded map[string]any
+	if jsonErr := json.Unmarshal(bytes.TrimSpace(out.Bytes()), &decoded); jsonErr != nil {
+		t.Fatalf("stdout is not valid JSON: %v (output: %q)", jsonErr, out.String())
+	}
+	if decoded["state_checkpoint_id"] != "sc-1" {
+		t.Errorf("state_checkpoint_id = %v, want sc-1", decoded["state_checkpoint_id"])
+	}
+	if decoded["repository_checkpoint_id"] != "rc-1" {
+		t.Errorf("repository_checkpoint_id = %v, want rc-1", decoded["repository_checkpoint_id"])
+	}
+}
