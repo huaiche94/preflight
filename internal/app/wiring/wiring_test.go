@@ -399,6 +399,61 @@ func TestApp_RootCmd_StatusIsRealNotStub(t *testing.T) {
 	}
 }
 
+// TestApp_RootCmd_ProgressCompleteIsRealNotStub proves issue #1's wiring:
+// `preflight progress complete` on the App-built tree calls through to the
+// injected ProgressTree fake's CompleteNode and renders real JSON, not
+// internal/cli.NewRootCmd()'s standalone ErrCodeUnavailable stub — while
+// `progress show` in the SAME swapped subtree deliberately remains a stub
+// (cli.NewProgressCmd's documented split).
+func TestApp_RootCmd_ProgressCompleteIsRealNotStub(t *testing.T) {
+	var got app.CompleteNodeRequest
+	services := fullFakeServices()
+	services.ProgressTree = &fakes.FakeProgressTreeService{
+		CompleteNodeFunc: func(_ context.Context, req app.CompleteNodeRequest) (app.ProgressNode, domain.StateCheckpoint, error) {
+			got = req
+			return app.ProgressNode{ID: req.NodeID, TaskID: "task-1", Status: domain.NodeCompleted},
+				domain.StateCheckpoint{ID: "sc-1", TaskID: "task-1"}, nil
+		},
+	}
+	a, err := wiring.New(services)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	root := a.RootCmd()
+	root.SetArgs([]string{"progress", "complete", "--node", "node-1", "--idempotency-key", "key-1", "--artifact", "file=/tmp/a.md", "--json"})
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("progress complete: %v (want the real handler to succeed, not the stub's ErrCodeUnavailable)", err)
+	}
+	if got.NodeID != "node-1" || got.IdempotencyKey != "key-1" || len(got.Artifacts) != 1 {
+		t.Fatalf("CompleteNode saw %+v, want node-1/key-1/one artifact end-to-end through the wired CLI command", got)
+	}
+	var decoded map[string]any
+	if jsonErr := json.Unmarshal(bytes.TrimSpace(out.Bytes()), &decoded); jsonErr != nil {
+		t.Fatalf("stdout is not valid JSON: %v (output: %q)", jsonErr, out.String())
+	}
+	if decoded["node_status"] != string(domain.NodeCompleted) {
+		t.Errorf("node_status = %v, want %q", decoded["node_status"], domain.NodeCompleted)
+	}
+	if decoded["state_checkpoint_id"] != "sc-1" {
+		t.Errorf("state_checkpoint_id = %v, want sc-1", decoded["state_checkpoint_id"])
+	}
+
+	// The swap must not have silently promoted `progress show` — it stays
+	// the honest stub on this tree too.
+	root.SetArgs([]string{"progress", "show"})
+	out.Reset()
+	showErr := root.Execute()
+	var derr *domain.Error
+	if !errors.As(showErr, &derr) || derr.Code != domain.ErrCodeUnavailable {
+		t.Errorf("progress show: err = %v, want the stub's ErrCodeUnavailable", showErr)
+	}
+}
+
 // TestApp_RootCmd_DoctorIsRealNotStub proves runtime-b08's wiring:
 // `preflight doctor` on the App-built tree runs real checks (here, all
 // skipped since Diagnostics was left at its zero value) and renders real

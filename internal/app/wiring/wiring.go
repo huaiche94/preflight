@@ -105,6 +105,21 @@ type HookSupport struct {
 	IDs       domain.IDGenerator
 	Persister orchestrator.EventPersister
 	TxRunner  app.TxRunner
+
+	// SessionResolver optionally enables hook event correlation (issue #1,
+	// internal/orchestrator/correlate.go): when non-nil, RootCmd wires an
+	// orchestrator.EventCorrelator over it (session -> task) and the
+	// container's own ProgressTree service (task -> single in-progress
+	// node), so persisted hook events carry TaskID/ProgressNodeID whenever
+	// they resolve unambiguously. The real value is the same
+	// internal/evaluation.SQLDataSource cmd/preflight/wire.go already
+	// constructs for the evaluation pipeline (it satisfies the narrow
+	// orchestrator.SessionResolver view of the frozen app.FeatureDataSource
+	// port). nil disables correlation entirely — events persist with
+	// SessionID only, exactly the pre-issue-#1 behavior — which is the
+	// right degrade for callers with no session registry to resolve
+	// against (most tests, minimal compositions).
+	SessionResolver orchestrator.SessionResolver
 }
 
 // DiagnosticsSupport bundles the optional collaborators
@@ -206,6 +221,20 @@ func (a *App) RootCmd() *cobra.Command {
 	if hookDeps.IDs == nil {
 		hookDeps.IDs = idgen.New()
 	}
+	// Event correlation (issue #1) is gated on a SessionResolver being
+	// wired: the correlator's task half has nothing to resolve against
+	// without one, and orchestrator.EventCorrelator's own contract treats
+	// nil as a documented no-op — see Services.Hooks.SessionResolver's doc
+	// comment. The node half always uses this container's own required
+	// ProgressTree service, real or fake alike (Snapshot is the only
+	// method consumed, via the narrow orchestrator.ProgressSnapshotReader
+	// view).
+	if a.services.Hooks.SessionResolver != nil {
+		hookDeps.Correlator = &orchestrator.EventCorrelator{
+			Sessions: a.services.Hooks.SessionResolver,
+			Progress: a.services.ProgressTree,
+		}
+	}
 
 	replaceSubcommand(root, "hook", func(short string) *cobra.Command {
 		newHook := &cobra.Command{Use: "hook", Short: short}
@@ -224,6 +253,15 @@ func (a *App) RootCmd() *cobra.Command {
 	statusDeps := orchestrator.StatusDeps{ProgressTree: a.services.ProgressTree}
 	replaceSubcommand(root, "status", func(_ string) *cobra.Command {
 		return cli.NewStatusCmd(statusDeps)
+	})
+
+	// progress (issue #1): swapped unconditionally, like checkpoint/status,
+	// because its one dependency (ProgressTree) is a required service this
+	// container cannot exist without. Inside the replacement, `complete` is
+	// real and `show` remains root.go's stub — see cli.NewProgressCmd.
+	progressDeps := orchestrator.ProgressCompleteDeps{ProgressTree: a.services.ProgressTree}
+	replaceSubcommand(root, "progress", func(_ string) *cobra.Command {
+		return cli.NewProgressCmd(progressDeps)
 	})
 
 	doctorDeps := orchestrator.DoctorDeps{

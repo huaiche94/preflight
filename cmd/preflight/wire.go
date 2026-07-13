@@ -197,6 +197,13 @@ func buildRootCmd(ctx context.Context) (root *cobra.Command, closeFn func() erro
 			IDs:       ids,
 			Persister: claudetelemetry.NewEventStore(db),
 			TxRunner:  db,
+			// The SAME SQLDataSource the evaluation pipeline uses doubles
+			// as the hook event correlator's session -> task resolver
+			// (issue #1; it satisfies orchestrator.SessionResolver's
+			// narrow view of the frozen app.FeatureDataSource port), so
+			// persisted hook events carry TaskID/ProgressNodeID whenever
+			// they resolve unambiguously.
+			SessionResolver: dataSource,
 		},
 		Diagnostics: wiring.DiagnosticsSupport{
 			DB: db,

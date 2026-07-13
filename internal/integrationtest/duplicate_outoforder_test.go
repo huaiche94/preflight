@@ -16,53 +16,49 @@
 //     checkParentOrdering) — already unit-tested in
 //     internal/progress/complete_node_provider_events_test.go.
 //
-// # A load-bearing discovery this node made before writing a single test
+// # A load-bearing discovery this node made — since RESOLVED by issue #1
 //
-// Proving these two components work "together, exactly the way a real
-// duplicate/out-of-order delivery would actually manifest end-to-end"
-// first requires a real, production code path connecting a persisted
-// claude-provider pkg/protocol/v1.Event to a progress.CompleteNode.Run
-// call. A thorough repo-wide search (documented in full in this node's
-// docs/implementation/vertical-slice/qa.md entry and in the qa-04 final report)
-// established that NO such path exists in production code today:
+// qa-04 originally established (documented in full in docs/implementation/
+// vertical-slice/qa.md's P1 finding and the qa-04 final report) that NO
+// production code path connected a persisted claude-provider
+// pkg/protocol/v1.Event to the Progress Tree: hooks.go normalized and
+// persisted events and stopped there, no producer ever assigned
+// Event.TaskID/Event.ProgressNodeID, and no wiring bridged
+// internal/telemetry/claude to internal/progress. That finding was tracked
+// as GitHub issue #1 and is now closed by the approved "explicit
+// completion + event correlation" design:
 //
-//   - internal/orchestrator/hooks.go's HandleStop/HandleUserPromptSubmit/
-//     HandleStopFailure/HandleStatusLine normalize a claude-provider
-//     payload and persist the resulting v1.Event(s) via EventPersister —
-//     and stop there. HandleStop's own doc comment says so explicitly:
-//     "Full Progress Tree/Git/artifact reconciliation... is outcome
-//     labeling depth beyond this node's scope."
-//   - internal/telemetry/claude/normalizer.go never assigns
-//     Event.TaskID or Event.ProgressNodeID on any event it produces
-//     (every producer only sets SessionID via the shared envelope()
-//     helper) — so even a hypothetical future consumer would have nothing
-//     to resolve a stored event to a specific progress node with.
-//   - progress.Node carries a ProviderNodeID field (node_store.go) that is
-//     stored and read back, but no code anywhere looks a node up BY its
-//     ProviderNodeID, and progress.CompleteNodeInput/app.CompleteNodeRequest
-//     (the frozen contract, internal/app/ports.go) both take only
-//     {NodeID, IdempotencyKey, Artifacts[, RepositoryCheckpointID]} — no
-//     v1.Event, EventID, or EventType field exists anywhere on that path.
-//   - internal/app/wiring/wiring.go wires no bridge between
-//     internal/telemetry/claude and internal/progress either; its own doc
-//     comment says real ProgressTreeService implementations are a later
-//     node's concern.
+//   - EVENT CORRELATION: internal/orchestrator/correlate.go's
+//     EventCorrelator, wired into HookDeps by internal/app/wiring (and
+//     into the binary by cmd/preflight/wire.go's SessionResolver), now
+//     populates TaskID/ProgressNodeID on every hook-persisted event that
+//     resolves unambiguously — TaskID via the frozen
+//     app.FeatureDataSource.Resolve port, ProgressNodeID only when
+//     exactly one node is in_progress (zero or multiple candidates leave
+//     it empty: correlation never guesses).
+//   - EXPLICIT COMPLETION: `preflight progress complete`
+//     (internal/cli/progress.go -> orchestrator.ProgressComplete -> the
+//     frozen app.ProgressTreeService.CompleteNode) is the production path
+//     that actually completes a node, with caller-supplied idempotency
+//     key and validator-checked artifact evidence. Deliberately, no
+//     automatic event->CompleteNode adapter exists: a bare Stop signal is
+//     not completion evidence (Constitution §6.2), so completion stays an
+//     explicit, evidence-carrying request while correlation annotates the
+//     observational record around it.
 //
-// This is documented as this node's own P1 integration finding (see this
-// file's final test, TestDuplicateOutOfOrder_KnownGap_NoProviderEventToCompleteNodeAdapterExists,
-// and the qa-04 progress-artifact entry / final report for full routing).
-// Per agents/qa.md ("Do not alter feature production code in the initial
-// pass... only the contract-integrator authorizes cross-owner fixes"),
-// this file does NOT invent or land that adapter as production code. It
-// builds it ONLY as local, test-only glue (a package-private
-// `deriveCompleteNodeInput` helper below) — exactly the shape a future
-// production adapter would need — strictly so the two real components
-// (EventStore and CompleteNode) can be proven to compose correctly along
-// the fields the frozen v1.Event contract actually offers
-// (IdempotencyKey, ProgressNodeID, TaskID), while making unmistakably
-// clear in both code and this node's report that this glue is a TEST
-// fixture standing in for a production gap, not evidence that the gap is
-// closed.
+// The former TestDuplicateOutOfOrder_KnownGap_NoProviderEventToCompleteNodeAdapterExists
+// (which asserted the gap was still real) is accordingly FLIPPED into
+// TestDuplicateOutOfOrder_StopEventThroughProductionHookPath_CarriesCorrelation
+// below, which drives the production hook path end to end and asserts the
+// persisted event now carries the correlation — and still asserts the
+// duplicate-delivery idempotency contract across that same path.
+//
+// The package-private `deriveCompleteNodeInput` helper below remains
+// test-only glue for THIS FILE's other scenarios: it hand-builds a
+// CompleteNodeInput from a real event so EventStore's and CompleteNode's
+// idempotency semantics can be composed directly, standing in for the
+// explicit `progress complete` invocation a real operator/agent issues in
+// production (the CLI carries exactly these fields).
 //
 // Every test in this file is named so `go test ... -run 'Duplicate|OutOfOrder'`
 // (this node's own frozen validation command, EXECUTION_DAG.md qa-04 row)
@@ -71,15 +67,19 @@ package integrationtest
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/huaiche94/preflight/internal/app"
 	"github.com/huaiche94/preflight/internal/artifacts"
 	"github.com/huaiche94/preflight/internal/domain"
+	"github.com/huaiche94/preflight/internal/evaluation"
 	claudehooks "github.com/huaiche94/preflight/internal/hooks/claude"
+	"github.com/huaiche94/preflight/internal/orchestrator"
 	"github.com/huaiche94/preflight/internal/progress"
 	"github.com/huaiche94/preflight/internal/statecheckpoint"
 	"github.com/huaiche94/preflight/internal/storage/sqlite"
@@ -275,18 +275,17 @@ func qa04MoveToInProgress(t *testing.T, db *sqlite.DB, clock domain.Clock, id do
 	}
 }
 
-// deriveCompleteNodeInput is TEST-ONLY glue standing in for the production
-// adapter this node's package doc comment establishes does not yet exist.
-// It maps a real, normalized claude-provider v1.Event onto the frozen
-// progress.CompleteNodeInput shape the ONLY way the current v1.Event
-// contract actually supports: using the event's own IdempotencyKey
+// deriveCompleteNodeInput is TEST-ONLY glue standing in for the explicit
+// `preflight progress complete` invocation production now uses (issue #1's
+// explicit-completion design — see the package doc comment; there is
+// deliberately still no AUTOMATIC event->CompleteNode adapter). It maps a
+// real, normalized claude-provider v1.Event onto the frozen
+// progress.CompleteNodeInput shape using the event's own IdempotencyKey
 // (claude-provider's deterministic digest, normalizer.go's digestKey) as
-// the completion's IdempotencyKey, and the caller-supplied nodeID/artifacts
-// (since, per this file's header finding, a real produced event carries no
-// TaskID/ProgressNodeID of its own to resolve a node from). This is
-// exactly the "would a real adapter's dedup semantics survive contact with
-// a real event" question qa-04 exists to answer — it is NOT a claim that
-// this resolution logic exists in production.
+// the completion's IdempotencyKey, and the caller-supplied nodeID/
+// artifacts — the same fields the CLI's own flags carry. This is exactly
+// the "would completion's dedup semantics survive contact with a real
+// event's digest" question qa-04 exists to answer.
 func deriveCompleteNodeInput(ev v1.Event, nodeID domain.ProgressNodeID, artifactsRef []domain.ArtifactRef) progress.CompleteNodeInput {
 	return progress.CompleteNodeInput{
 		NodeID:         nodeID,
@@ -694,53 +693,252 @@ func TestOutOfOrderDelivery_EndToEnd_EventStoreAcceptsEitherArrivalOrder(t *test
 }
 
 // =========================================================================
-// Integration-only finding: documented, not fixed (agents/qa.md mandate).
+// Formerly the KnownGap finding — now FLIPPED: the gap is closed by design
+// (issue #1, "explicit completion + event correlation"; see the package
+// doc comment's RESOLVED section).
 // =========================================================================
 
-// TestDuplicateOutOfOrder_KnownGap_NoProviderEventToCompleteNodeAdapterExists
-// is this node's required "document the discrepancy, don't fix it" test
-// (task brief item 3; agents/qa.md: "Do not alter feature production
-// code... File defects against the owner"). It independently re-verifies,
-// at this integration layer, the finding this file's own package doc
-// comment describes in prose: a real claude-provider-normalized v1.Event
-// carries no TaskID/ProgressNodeID (they are always the Go zero value,
-// "" — confirmed here directly against a REAL normalized event, not by
-// inspecting source), so no code path in this repository can derive
-// which progress node an arbitrary persisted event's completion applies
-// to. This is not a bug this test introduces; it is proof the gap is real
-// (not just claimed) at the same integration layer this node's other
-// tests exercise, so qa's severity report can cite a concrete assertion
-// rather than only a prose claim. See this node's progress-artifact entry
-// and the final qa-04 report for the P1 classification and routing to
-// contract-integrator/claude-provider/checkpoint.
-func TestDuplicateOutOfOrder_KnownGap_NoProviderEventToCompleteNodeAdapterExists(t *testing.T) {
-	clock := qa04Clock{t: time.Date(2026, 7, 12, 11, 0, 0, 0, time.UTC)}
-	normalizer := claudetelemetry.NewNormalizer(clock, &qa04IDs{})
+// qa04SeedSessionChain inserts a repositories -> worktrees ->
+// provider_sessions chain for sessionID (mirroring qa02SeedChain, which is
+// unexported to this same package but scoped to qa-02's fixture values),
+// plus — when withTask is true — a tasks row bound to that session, so
+// evaluation.SQLDataSource.Resolve (the correlator's production resolver)
+// has the exact rows it queries in production. Returns the seeded TaskID
+// ("" when withTask is false: a registered session that has not started a
+// task yet, the cold-start case app.FeatureDataSource.Resolve documents).
+func qa04SeedSessionChain(t *testing.T, db *sqlite.DB, sessionID string, withTask bool) domain.TaskID {
+	t.Helper()
+	ctx := context.Background()
+	repoID := "repo-" + sessionID
+	worktreeID := "worktree-" + sessionID
+	taskID := "task-" + sessionID
+	now := time.Date(2026, 7, 12, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
 
-	parsed, err := claudehooks.ParseStop(qa04Fixture(t, "stop", "normal.json"))
+	err := db.WithTx(ctx, func(ctx context.Context) error {
+		q := sqlite.QuerierFromContext(ctx, db)
+		if _, err := q.ExecContext(ctx, `
+			INSERT INTO repositories (id, canonical_root, git_common_dir, created_at, last_seen_at)
+			VALUES (?, ?, ?, ?, ?)`, repoID, "/tmp/"+repoID, "/tmp/"+repoID+"/.git", now, now); err != nil {
+			return err
+		}
+		if _, err := q.ExecContext(ctx, `
+			INSERT INTO worktrees (id, repository_id, root_path, git_dir, created_at, last_seen_at)
+			VALUES (?, ?, ?, ?, ?, ?)`, worktreeID, repoID, "/tmp/"+repoID, "/tmp/"+repoID+"/.git", now, now); err != nil {
+			return err
+		}
+		if _, err := q.ExecContext(ctx, `
+			INSERT INTO provider_sessions (id, worktree_id, provider, invocation_mode, started_at, metadata_json)
+			VALUES (?, ?, 'claude-code', 'interactive', ?, '{}')`, sessionID, worktreeID, now); err != nil {
+			return err
+		}
+		if !withTask {
+			return nil
+		}
+		_, err := q.ExecContext(ctx, `
+			INSERT INTO tasks (id, session_id, worktree_id, objective_hash, status, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`, taskID, sessionID, worktreeID, "objective-hash", "in_progress", now, now)
+		return err
+	})
 	if err != nil {
-		t.Fatalf("ParseStop: %v", err)
+		t.Fatalf("qa04SeedSessionChain: %v", err)
 	}
-	ev := normalizer.NormalizeStop(parsed, clock.Now())
+	if !withTask {
+		return ""
+	}
+	return domain.TaskID(taskID)
+}
 
-	if ev.TaskID != "" {
-		t.Fatalf("expected a real normalized Stop event's TaskID to be empty (no production code assigns it); got %q — if this now fails, claude-provider has started populating TaskID and this node's finding should be re-verified and, if resolved, this test updated/removed rather than silently loosened", ev.TaskID)
+// qa04ProgressService composes the real, fully-composed
+// app.ProgressTreeService exactly the way cmd/preflight/wire.go does
+// (progress.NewService over the same real stores/CompleteNode/Reconciler),
+// because the correlator's node lookup consumes the frozen Snapshot method
+// on that service — using the production implementation here is what makes
+// this "the production hook path", not a test-local snapshot shim.
+func qa04ProgressService(t *testing.T, db *sqlite.DB, clock domain.Clock) app.ProgressTreeService {
+	t.Helper()
+	cn := qa04CompleteNodeHarness(t, db, clock, &qa04IDs{})
+	reconciler := &progress.Reconciler{
+		Nodes:       cn.Nodes,
+		Checkpoints: cn.Checkpoints,
+		EvidenceDir: t.TempDir(),
 	}
-	if ev.ProgressNodeID != "" {
-		t.Fatalf("expected a real normalized Stop event's ProgressNodeID to be empty (no production code assigns it); got %q — same re-verification note as TaskID above", ev.ProgressNodeID)
+	return progress.NewService(progress.NewTaskStore(db, clock), cn.Nodes, cn, reconciler, clock, &qa04IDs{})
+}
+
+// qa04StoredStopEvents reads back every persisted provider.turn.completed
+// row for sessionID, oldest first, returning the two correlation columns
+// as sql.NullString so NULL ("uncorrelated") is distinguishable from a
+// stored empty string (which nullableString in store.go never writes).
+func qa04StoredStopEvents(t *testing.T, db *sqlite.DB, sessionID string) []struct{ taskID, nodeID sql.NullString } {
+	t.Helper()
+	rows, err := db.Conn().QueryContext(context.Background(), `
+		SELECT task_id, progress_node_id FROM events
+		WHERE session_id = ? AND event_type = 'provider.turn.completed'
+		ORDER BY observed_at ASC, event_id ASC`, sessionID)
+	if err != nil {
+		t.Fatalf("querying stored stop events: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []struct{ taskID, nodeID sql.NullString }
+	for rows.Next() {
+		var r struct{ taskID, nodeID sql.NullString }
+		if err := rows.Scan(&r.taskID, &r.nodeID); err != nil {
+			t.Fatalf("scanning stored stop event: %v", err)
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterating stored stop events: %v", err)
+	}
+	return out
+}
+
+// TestDuplicateOutOfOrder_StopEventThroughProductionHookPath_CarriesCorrelation
+// is the flipped successor to the former
+// TestDuplicateOutOfOrder_KnownGap_NoProviderEventToCompleteNodeAdapterExists:
+// the gap that test existed to document is now closed by issue #1's event
+// correlation, and this test asserts the closure END TO END through the
+// production hook path — orchestrator.HandleStop with the exact HookDeps
+// shape cmd/preflight/wire.go + internal/app/wiring compose (real
+// EventStore persister, real evaluation.SQLDataSource resolver, real
+// progress.NewService snapshot reader), a REAL Stop fixture on stdin, and
+// the same real on-disk migrated SQLite database under all of it.
+//
+// It proves all three of the flip's required properties:
+//
+//  1. CORRELATED WHEN UNAMBIGUOUS: with the fixture's session bound to an
+//     active task that has exactly one in_progress node, the persisted
+//     provider.turn.completed row carries that TaskID and ProgressNodeID.
+//  2. IDEMPOTENT ACROSS DUPLICATE DELIVERY (the assertions the former
+//     test's siblings established, kept intact on THIS path too): the
+//     same hook firing redelivered — same fixture bytes, same clock
+//     reading, hence claude-provider's same deterministic digest — is a
+//     successful no-op, leaving exactly one stored row, still correlated.
+//  3. EMPTY WHEN AMBIGUOUS/UNRESOLVABLE: with a second node also
+//     in_progress (two candidates), a later delivery persists with the
+//     task still attributed but progress_node_id NULL — correlation never
+//     guesses between candidates; and for a registered session with no
+//     task at all, the event persists fully uncorrelated (both columns
+//     NULL) rather than failing the hook.
+func TestDuplicateOutOfOrder_StopEventThroughProductionHookPath_CarriesCorrelation(t *testing.T) {
+	db := openQA04DB(t)
+	ctx := context.Background()
+	clock := qa04Clock{t: time.Date(2026, 7, 12, 11, 0, 0, 0, time.UTC)}
+
+	// The real Stop fixture's own session_id — the seeded chain must match
+	// what claudehooks.ParseStop will actually read off stdin.
+	const sessionID = "sess_01H9X8K7QZ3M4N5P6R7S8T9V0W"
+	taskID := qa04SeedSessionChain(t, db, sessionID, true)
+
+	// Progress Tree: two nodes, exactly ONE in_progress — the unambiguous
+	// single-candidate shape correlation is allowed to attribute to.
+	activeID := domain.ProgressNodeID("node-active")
+	idleID := domain.ProgressNodeID("node-idle")
+	nodeStore := progress.NewNodeStore(db, clock)
+	if err := nodeStore.Insert(ctx, qa04DocumentNode(taskID, activeID, nil, 1, domain.NodePending, "# Active")); err != nil {
+		t.Fatalf("insert active node: %v", err)
+	}
+	if err := nodeStore.Insert(ctx, qa04DocumentNode(taskID, idleID, nil, 2, domain.NodePending, "# Idle")); err != nil {
+		t.Fatalf("insert idle node: %v", err)
+	}
+	qa04MoveToInProgress(t, db, clock, activeID)
+
+	// Production wiring shape (cmd/preflight/wire.go's HookSupport +
+	// wiring.App.RootCmd's correlator construction), assembled directly.
+	store := claudetelemetry.NewEventStore(db)
+	deps := orchestrator.HookDeps{
+		Clock:     clock,
+		IDs:       &qa04IDs{},
+		Persister: store,
+		TxRunner:  db,
+		Correlator: &orchestrator.EventCorrelator{
+			Sessions: evaluation.NewSQLDataSource(db),
+			Progress: qa04ProgressService(t, db, clock),
+		},
 	}
 
-	// The EventType this event carries (provider.turn.completed) IS, per
-	// this node's own task brief, "a signal [that] corresponds to a
-	// node-completion-triggering signal" in the product's intended design
-	// (ADD's Progress Tree is meant to advance from real provider
-	// observations) — yet nothing in pkg/protocol/v1.Event, app.ports.go's
-	// CompleteNodeRequest, or progress.CompleteNodeInput carries a field
-	// that would let a consumer resolve THIS SPECIFIC event to a
-	// ProgressNodeID without an out-of-band lookup this repository does
-	// not yet implement anywhere. This assertion is intentionally about
-	// the type/contract shape, not a runtime behavior, because the gap
-	// IS the absence of a contract field/consumer, not a bug in existing
-	// logic.
-	t.Logf("confirmed integration gap: EventType=%s carries SessionID=%q but TaskID/ProgressNodeID are unset on every real produced event, and no CompleteNodeInput/CompleteNodeRequest field accepts a v1.Event or resolves one to a node — see this node's progress artifact / final report for P1 routing", ev.EventType, ev.SessionID)
+	// --- 1. Unambiguous: persisted event carries TaskID + ProgressNodeID.
+	result, err := orchestrator.HandleStop(ctx, deps, qa04Fixture(t, "stop", "normal.json"))
+	if err != nil {
+		t.Fatalf("HandleStop: %v", err)
+	}
+	if result.EventsNormalized != 1 || !result.Persisted {
+		t.Fatalf("HandleStop result = %+v, want 1 event normalized and persisted", result)
+	}
+
+	stored := qa04StoredStopEvents(t, db, sessionID)
+	if len(stored) != 1 {
+		t.Fatalf("stored stop events = %d, want 1", len(stored))
+	}
+	if !stored[0].taskID.Valid || stored[0].taskID.String != string(taskID) {
+		t.Fatalf("stored task_id = %+v, want %q — the production hook path must correlate the event to the session's active task", stored[0].taskID, taskID)
+	}
+	if !stored[0].nodeID.Valid || stored[0].nodeID.String != string(activeID) {
+		t.Fatalf("stored progress_node_id = %+v, want %q (the single in_progress node)", stored[0].nodeID, activeID)
+	}
+
+	// --- 2. Duplicate delivery: idempotency intact on the correlated path.
+	// Re-reading the same fixture with the same clock reading reproduces
+	// claude-provider's deterministic digest (normalizer.go's digestKey),
+	// exactly how a redelivered hook firing manifests; the second persist
+	// is a successful ON CONFLICT no-op, not an error and not a second row.
+	redelivered, err := orchestrator.HandleStop(ctx, deps, qa04Fixture(t, "stop", "normal.json"))
+	if err != nil {
+		t.Fatalf("HandleStop (duplicate delivery): %v", err)
+	}
+	if !redelivered.Persisted {
+		t.Fatalf("duplicate delivery result = %+v, want Persisted=true (a dedup no-op is a successful persist, not a failure)", redelivered)
+	}
+	stored = qa04StoredStopEvents(t, db, sessionID)
+	if len(stored) != 1 {
+		t.Fatalf("stored stop events after duplicate delivery = %d, want exactly 1 (idempotency key dedup)", len(stored))
+	}
+	if !stored[0].taskID.Valid || stored[0].taskID.String != string(taskID) {
+		t.Fatalf("duplicate delivery corrupted the original row's correlation: task_id = %+v", stored[0].taskID)
+	}
+
+	// --- 3a. Ambiguous: two in_progress nodes -> node attribution empty.
+	qa04MoveToInProgress(t, db, clock, idleID)
+	laterDeps := deps
+	laterDeps.Clock = qa04Clock{t: clock.t.Add(5 * time.Minute)} // later observation: a genuinely new event, new digest
+	ambiguous, err := orchestrator.HandleStop(ctx, laterDeps, qa04Fixture(t, "stop", "normal.json"))
+	if err != nil {
+		t.Fatalf("HandleStop (ambiguous window): %v", err)
+	}
+	if !ambiguous.Persisted {
+		t.Fatalf("ambiguous-window result = %+v, want Persisted=true", ambiguous)
+	}
+	stored = qa04StoredStopEvents(t, db, sessionID)
+	if len(stored) != 2 {
+		t.Fatalf("stored stop events = %d, want 2 (the ambiguous delivery is a new observation)", len(stored))
+	}
+	if !stored[1].taskID.Valid || stored[1].taskID.String != string(taskID) {
+		t.Fatalf("ambiguous-window task_id = %+v, want %q (the task still resolves unambiguously)", stored[1].taskID, taskID)
+	}
+	if stored[1].nodeID.Valid {
+		t.Fatalf("ambiguous-window progress_node_id = %q, want NULL — with two in_progress candidates, correlation must never guess", stored[1].nodeID.String)
+	}
+
+	// --- 3b. No task at all: event persists fully uncorrelated, hook
+	// still succeeds (fail-open). This session is registered but has no
+	// tasks row, so Resolve returns a nil TaskID (cold-start, not an
+	// error). The payload is built inline because the on-disk fixtures are
+	// all bound to the main session's ID; it still flows through the same
+	// production ParseStop -> NormalizeStop -> correlate -> persist path.
+	const bareSessionID = "sess-qa04-no-task-yet"
+	qa04SeedSessionChain(t, db, bareSessionID, false)
+	bare, err := orchestrator.HandleStop(ctx, deps, []byte(`{"session_id":"`+bareSessionID+`","hook_event_name":"Stop","stop_hook_active":false}`))
+	if err != nil {
+		t.Fatalf("HandleStop (task-less session): %v", err)
+	}
+	if !bare.Persisted {
+		t.Fatalf("task-less session result = %+v, want Persisted=true (uncorrelated events must still persist)", bare)
+	}
+	bareStored := qa04StoredStopEvents(t, db, bareSessionID)
+	if len(bareStored) != 1 {
+		t.Fatalf("stored stop events for the task-less session = %d, want 1", len(bareStored))
+	}
+	if bareStored[0].taskID.Valid || bareStored[0].nodeID.Valid {
+		t.Fatalf("task-less session's row = task_id %+v / progress_node_id %+v, want both NULL (unknown is not zero)", bareStored[0].taskID, bareStored[0].nodeID)
+	}
 }

@@ -62,13 +62,18 @@ type EventPersister interface {
 // implementation — not a fake). TxRunner is required only when Persister
 // is non-nil (PersistAll needs a transaction boundary to run inside).
 // Evaluation is used only by HandleUserPromptSubmit, to render a policy
-// decision into the hook's block/allow response.
+// decision into the hook's block/allow response. Correlator, when non-nil,
+// annotates events with TaskID/ProgressNodeID before they are persisted
+// (correlate.go — the issue #1 event-correlation component); nil keeps the
+// pre-correlation behavior (events persisted with SessionID only), the
+// same nil-is-a-documented-degrade convention Persister already uses.
 type HookDeps struct {
 	Clock      domain.Clock
 	IDs        domain.IDGenerator
 	Persister  EventPersister
 	TxRunner   app.TxRunner
 	Evaluation app.EvaluationService
+	Correlator *EventCorrelator
 }
 
 func (d HookDeps) normalizer() *claudetelemetry.Normalizer {
@@ -86,6 +91,13 @@ func (d HookDeps) persist(ctx context.Context, evs []v1.Event) (persisted bool) 
 	if d.Persister == nil || d.TxRunner == nil || len(evs) == 0 {
 		return false
 	}
+	// Best-effort correlation before the durable write (issue #1's event-
+	// correlation design, correlate.go): populate TaskID/ProgressNodeID
+	// where they resolve unambiguously, leave them empty everywhere else.
+	// Correlate is nil-receiver-safe and never returns an error, so it can
+	// never turn a persistable batch into a failed hook — the fail-open
+	// contract this function's own doc comment describes extends to it.
+	d.Correlator.Correlate(ctx, evs)
 	if err := d.Persister.PersistAll(ctx, d.TxRunner, evs); err != nil {
 		return false
 	}

@@ -49,6 +49,7 @@ func TestStubCommandsReturnNotImplemented(t *testing.T) {
 		{"decision", "deny"},
 		{"checkpoint", "create"},
 		{"progress", "show"},
+		{"progress", "complete"},
 		{"state", "show"},
 		{"pause", "request"},
 		{"pause", "cancel"},

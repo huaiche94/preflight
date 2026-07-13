@@ -157,22 +157,45 @@ func newCheckpointCmd() *cobra.Command {
 	return cmd
 }
 
-// newProgressCmd builds `preflight progress show` (ProgressTreeService.Snapshot).
-// Stub: depends on internal/app/wiring, not built this wave.
+// newProgressCmd builds the standalone-stub `preflight progress
+// {show,complete}` subtree. `show` (ProgressTreeService.Snapshot) remains
+// a stub: depends on internal/app/wiring, not built this wave. `complete`
+// is a stub ONLY on this bare tree — internal/app/wiring.App.RootCmd()
+// replaces the whole `progress` subtree with NewProgressCmd's real
+// handlers (progress.go), the same stub-then-swap pattern `hook`/
+// `checkpoint`/`status` already follow.
 func newProgressCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "progress",
 		Short: "Inspect the Progress Tree",
 	}
-	cmd.AddCommand(&cobra.Command{
+	cmd.AddCommand(
+		newProgressShowStubCmd(),
+		&cobra.Command{
+			Use:   "complete",
+			Short: "Complete a Progress Tree node with artifact evidence",
+			Args:  cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, args []string) error {
+				return notImplemented("progress complete")
+			},
+		},
+	)
+	return cmd
+}
+
+// newProgressShowStubCmd builds the `progress show` stub leaf. Factored
+// out of newProgressCmd because the REAL progress subtree (NewProgressCmd,
+// progress.go) keeps this same stub for `show` — only `complete` has a
+// real implementation as of issue #1 — and the two trees must not drift.
+func newProgressShowStubCmd() *cobra.Command {
+	return &cobra.Command{
 		Use:   "show",
 		Short: "Show the current Progress Tree snapshot",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return notImplemented("progress show")
 		},
-	})
-	return cmd
+	}
 }
 
 // newStateCmd builds `preflight state show` (StateCheckpointService.LoadLatest).

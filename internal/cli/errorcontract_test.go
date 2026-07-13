@@ -21,10 +21,14 @@
 //     schema-versioned success JSON (version prints a bare string; the
 //     other four are permanent stubs — no CLI constructor for the real
 //     thing exists anywhere in this repository as of this node, for
-//     evaluate/init/progress/state; only the notImplemented stub path is
-//     reachable). This is a real, pre-existing gap this audit surfaces
+//     evaluate/init/progress show/state; only the notImplemented stub path
+//     is reachable). This is a real, pre-existing gap this audit surfaces
 //     explicitly (see TestErrorContract_KnownIncompleteCommands_AreStubsOnly
 //     below) rather than silently working around or papering over.
+//     (`progress complete` is deliberately NOT in that list: issue #1
+//     added a real constructor for it — cli.NewProgressCmd, progress.go —
+//     whose subtree still keeps `show` as a stub; progress_test.go's
+//     TestProgressComplete_ShowRemainsStubOnRealTree tracks that split.)
 //   - THE genuine, fixable gap: no command's returned *domain.Error was
 //     ever serialized to JSON anywhere before this node — every command
 //     constructed the right typed Go value, but Cobra's own default error
@@ -93,6 +97,7 @@ func allP0CommandPaths() [][]string {
 		{"decision", "deny"},
 		{"checkpoint", "create"},
 		{"progress", "show"},
+		{"progress", "complete"},
 		{"state", "show"},
 		{"pause", "request"},
 		{"pause", "cancel"},
