@@ -413,7 +413,7 @@ func CheckSessionCapability(ctx context.Context, reader SessionCapabilityReader,
 // valid" check via the frozen app.EvaluationService.ConsumeAuthorization
 // (real port; predictor-09/10's Evaluation-persistence implementation is
 // FAKED for this specific call this wave — see this package's doc.go
-// addition / docs/implementation/day1/runtime.md's Wave 8 section for why:
+// addition / docs/implementation/vertical-slice/runtime.md's Wave 8 section for why:
 // predictor-10's authorization-hardening pass is a concurrent sibling this
 // same wave, not yet mergeable, per the task brief's explicit instruction
 // to use a fake here consistent with the established fake-then-swap

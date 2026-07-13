@@ -109,13 +109,13 @@ touched by this artifact and has no entry here yet.
 
 ## Naming-convention judgment call: kebab-case hook subcommands
 
-`docs/implementation/day1/wave2-analysis/ADR_Recommendations.md` REC-03
+`docs/implementation/vertical-slice/wave2-analysis/ADR_Recommendations.md` REC-03
 documents a real, still-open discrepancy: `Preflight_ADD.md` Appendix E.3
 spells Claude Code hook subcommands in PascalCase (e.g. `UserPromptSubmit`,
 matching Claude's own hook-event-name casing), while `agents/runtime.md`'s
 own P0 command list, this node's DAG validation command
-(`docs/implementation/day1/EXECUTION_DAG.md` `runtime-b01`'s row), and the
-Day-1 execution plan's demo script all independently use kebab-case
+(`docs/implementation/vertical-slice/EXECUTION_DAG.md` `runtime-b01`'s row), and the
+vertical-slice execution plan's demo script all independently use kebab-case
 (`user-prompt-submit`). REC-03 explicitly names `runtime-b01`'s real CLI
 command tree as the first place this decision becomes real, and recommends
 resolving it via ADR before this node, not after — that ADR has not been
@@ -215,7 +215,7 @@ blockers: []
 
 # Wave 4
 
-Branch: `day1/runtime`, synced from `main` (Wave 3 integration state,
+Branch: `vertical-slice/runtime`, synced from `main` (Wave 3 integration state,
 `664436d`) via fast-forward before any Wave 4 work — required so
 foundation-06's migration engine + 0001-0004 core-schema files exist on
 this branch. Assigned nodes, executed sequentially: `runtime-a01`
@@ -430,7 +430,7 @@ blockers: []
 
 # Wave 5
 
-Branch: `day1/runtime`, synced from `main` (Wave 4 integration state,
+Branch: `vertical-slice/runtime`, synced from `main` (Wave 4 integration state,
 `5470e4d`) via fast-forward merge before any Wave 5 work — clean, no
 conflicts (this role only owns its own paths). Brings in
 `foundation`'s migrate_test.go range-scoped-assertion fix, `checkpoint`'s
@@ -859,7 +859,7 @@ in this artifact's node logs:
 
 # Wave 6
 
-Branch: `day1/runtime`, synced from `main` via `git fetch origin && git
+Branch: `vertical-slice/runtime`, synced from `main` via `git fetch origin && git
 merge origin/main` (fast-forward, clean — no conflicts, this role only
 owns its own paths) before any Wave 6 work. Brings in Wave 5's integrated
 state, including `checkpoint`'s real `checkpoint-b04` (repository
@@ -1123,7 +1123,7 @@ blockers: []
 
 # Wave 7
 
-Branch: `day1/runtime`, synced from `main` via `git fetch origin && git
+Branch: `vertical-slice/runtime`, synced from `main` via `git fetch origin && git
 merge origin/main` (fast-forward, clean — no conflicts) before any Wave 7
 work, landing at `1440f4c`. Brings in Wave 6's integrated state: `checkpoint`'s
 real `CompleteNode`/State Checkpoint work (`internal/progress`,
@@ -1349,7 +1349,7 @@ blockers: []
 
 # Wave 8
 
-Branch: `day1/runtime`, synced from `main` via `git fetch origin && git
+Branch: `vertical-slice/runtime`, synced from `main` via `git fetch origin && git
 merge origin/main` (fast-forward, clean — no conflicts) before any Wave 8
 work, landing at `2b7c29c`. Brings in Wave 7's integrated state: `checkpoint`'s
 real `internal/statecheckpoint.Service` (`app.StateCheckpointService`) and
@@ -2102,7 +2102,7 @@ validation:
 commit: ad335b2
 next_action: runtime-b10 (this role's final node) — NOT this wave
 assumptions:
-  - "internal/httpapi is out of Day-1 scope per agents/runtime.md's own
+  - "internal/httpapi is out of vertical-slice scope per agents/runtime.md's own
     stretch-goal framing; the DAG's validation command referencing it is
     a documented no-op for this node, not a gap this node closes by
     building a placeholder package."
@@ -2164,10 +2164,10 @@ blockers: []
 
 # Wave 11
 
-Branch: `day1/runtime`, synced from `main` via `git fetch origin && git
+Branch: `vertical-slice/runtime`, synced from `main` via `git fetch origin && git
 merge origin/main` (fast-forward, clean — no conflicts) before any Wave 11
 work, landing at `b7346a4` (Wave 10 fully integrated). Assigned node:
-`runtime-b10` — this role's FINAL Day-1 node, per the task brief's explicit
+`runtime-b10` — this role's FINAL vertical-slice node, per the task brief's explicit
 statement that no further node exists for this role after this one.
 
 ## runtime-b10 — In-process restart, same SQLite file (final Part B gate)
@@ -2411,7 +2411,7 @@ assumptions:
     database/sql-level artifact, not a storage-layer bug) — documented in
     both the code comments and this artifact so a future reader does not
     have to rediscover why the simpler approach doesn't work."
-  - "internal/httpapi, internal/daemon remain out of Day-1 scope, unchanged
+  - "internal/httpapi, internal/daemon remain out of vertical-slice scope, unchanged
     from every prior wave's same observation — no code added there this
     node, consistent with agents/runtime.md's own stretch-goal framing."
 blockers: []
@@ -2419,7 +2419,7 @@ blockers: []
 
 ## Wave 11 cross-node observations — and full role retrospective
 
-Since this is `runtime`'s final Day-1 node, this section closes out both
+Since this is `runtime`'s final vertical-slice node, this section closes out both
 the wave and the entire role arc (Bootstrap was lead-only, per
 `CONTRACT_FREEZE.md`; this role's own history runs Wave 3 through Wave 11,
 21 total DAG nodes: `a01`-`a11`, `b01`-`b10`).
@@ -2532,5 +2532,5 @@ start, not discover the same false-positive the hard way.
   shape (integration-proof, not new-feature) was different in kind from
   every node the original observation was made against.
 
-This closes `runtime`'s full Day-1 DAG scope. No further node remains
+This closes `runtime`'s full vertical-slice DAG scope. No further node remains
 assigned to this role.

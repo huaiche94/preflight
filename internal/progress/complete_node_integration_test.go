@@ -34,7 +34,7 @@
 //     crash window rather than contradicting each other.
 //
 // This is explicitly the gate for qa-02's E2E test (EXECUTION_DAG.md: "the
-// literal Day-1 demo"), so every scenario here uses the real CompleteNode,
+// literal vertical-slice demo"), so every scenario here uses the real CompleteNode,
 // the real statecheckpoint.Store/Service/Reconciler, and the real
 // progress.Reconciler — no package in this file is faked except the
 // deterministic Clock/IDGenerator test doubles this whole role already

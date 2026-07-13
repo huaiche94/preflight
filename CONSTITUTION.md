@@ -25,7 +25,7 @@ as authoritative over the documents named below for their subject.
 | Product architecture, domain model, requirements, roadmap | `Preflight_ADD.md` |
 | Architecture decisions that amend the ADD | Accepted ADRs under `docs/adr/` |
 | Process, governance, invariants, who-can-modify-what | **This file** |
-| Current execution wave's mechanics (topology, merge order, ownership map) | `Preflight_Day1_Parallel_Execution_Plan.md` (or its successor for later waves) |
+| Current execution wave's mechanics (topology, merge order, ownership map) | `Preflight_Parallel_Execution_Plan.md` (or its successor for later waves) |
 | A given role's mission, exclusive paths, deliverables, tests | Its file under `agents/` |
 | Contributor/agent quick-reference | `AGENTS.md` |
 | Project entry point / orientation | `README.md` |
@@ -84,7 +84,7 @@ Rules:
 1. Every role owns a disjoint set of paths, declared in its `agents/*.md` file and summarized in the current execution plan's shared-file policy section.
 2. A role may only modify files inside its own declared paths.
 3. Shared, cross-cutting files — `Preflight_ADD.md`, this `CONSTITUTION.md`, `AGENTS.md`, `internal/domain/**`, `internal/app/ports.go`, `pkg/protocol/v1/**`, `docs/adr/**` — are owned exclusively by `contract-integrator`. No other role edits them, ever, including "just a typo fix."
-4. If a role needs a change to a file it doesn't own, it requests the change through its progress artifact (`docs/implementation/day1/<role>.md` or the equivalent for a later wave) — it does not make the edit itself and does not wait idle; it works around the gap with a documented assumption until the owner responds.
+4. If a role needs a change to a file it doesn't own, it requests the change through its progress artifact (`docs/implementation/vertical-slice/<role>.md` or the equivalent for a later wave) — it does not make the edit itself and does not wait idle; it works around the gap with a documented assumption until the owner responds.
 5. No role may expand its own path ownership. Only `contract-integrator` may reassign path ownership, and only by updating the execution plan and the affected `agents/*.md` files in the same change.
 6. `go.mod` and `go.sum` are owned only by `foundation`.
 7. Migration file ranges are fixed per role (see the current execution plan §7); a role never writes a migration outside its assigned range.
@@ -113,7 +113,7 @@ These are product invariants (`Preflight_ADD.md` §1.3, §1.6, §6.4, FR-100–F
 4. **Node status values are the fixed enum** (`pending`, `ready`, `in_progress`, `checkpointing`, `paused`, `completed`, `failed`, `skipped`, `blocked`) — no role invents an ad hoc status.
 5. **State writes are atomic, idempotent, and crash-recoverable.** A crash mid-write must never leave a node that looks completed but isn't backed by verified evidence.
 6. **Duplicate completion with conflicting evidence is rejected**, not silently merged or overwritten.
-7. This same discipline applies, by analogy, to the meta-level progress artifacts each role keeps under `docs/implementation/day1/<role>.md` while building Preflight itself: conversation-only progress does not count there either (current execution plan §9).
+7. This same discipline applies, by analogy, to the meta-level progress artifacts each role keeps under `docs/implementation/vertical-slice/<role>.md` while building Preflight itself: conversation-only progress does not count there either (current execution plan §9).
 
 ## 7. Rules every agent must follow
 

@@ -1,7 +1,7 @@
 // restoredryrun.go: checkpoint-b08's "Restore dry-run" deliverable
 // (agents/checkpoint.md Part B deliverable #9; Preflight_ADD.md §19.6
 // "Restore"). Actual restore-that-mutates-the-working-tree remains
-// explicitly out of Day-1 scope (this node's own DAG risk note: "actual
+// explicitly out of vertical-slice scope (this node's own DAG risk note: "actual
 // restore is stretch/deferred") — app.RepositoryCheckpointService.Restore
 // (the frozen port method) NEVER writes to the working tree, index, or any
 // ref; it only reports, in full ADD §19.6 detail, what a real restore
@@ -101,7 +101,7 @@ type RestoreDryRunReport struct {
 // RestoreDryRun evaluates whether restoring row's checkpoint onto the live
 // repository at worktreePath would succeed right now, performing every ADD
 // §19.6 check EXCEPT anything that requires actually mutating the working
-// tree, index, or refs (real restore is out of Day-1 scope). It never
+// tree, index, or refs (real restore is out of vertical-slice scope). It never
 // calls a Git subcommand capable of mutating repository state — the same
 // invariant capture.go's own doc comment establishes for Capture, extended
 // here to Restore's dry-run half.

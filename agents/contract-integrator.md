@@ -19,7 +19,7 @@ internal/domain/**
 internal/app/ports.go
 pkg/protocol/v1/**
 docs/adr/**
-docs/implementation/day1/CONTRACT_FREEZE.md
+docs/implementation/vertical-slice/CONTRACT_FREEZE.md
 Preflight_ADD.md (only when a genuine contradiction requires an ADR)
 AGENTS.md
 ```

@@ -33,7 +33,7 @@
 -- boundaries") is responsible for keeping them consistent. Restoring the
 -- canonical constraints via a table-recreating migration later in this
 -- range (0053+) once 0010-0049 have landed is proposed to
--- contract-integrator in docs/implementation/day1/runtime.md.
+-- contract-integrator in docs/implementation/vertical-slice/runtime.md.
 --
 -- runway_forecast_id stays NOT NULL: a pause exists only because a
 -- specific runway forecast predicted/justified it (ADD §20), and that

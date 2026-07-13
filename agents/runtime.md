@@ -38,7 +38,7 @@ internal/daemon/**
 internal/app/wiring/**
 internal/testutil/fakes/** (coordinate with the qa role)
 
-docs/implementation/day1/runtime.md
+docs/implementation/vertical-slice/runtime.md
 ```
 
 Do not edit `cmd/preflight/main.go`; the contract-integrator and foundation

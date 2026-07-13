@@ -4,7 +4,7 @@
 -- worktrees (0002). This is the table every provider role's own migration
 -- range (claude-provider 0010-0019 and later provider adapters) FKs its
 -- turns/telemetry tables into, so its shape here is load-bearing for all of
--- them — see docs/implementation/day1/CONTRACT_FREEZE.md's migration-range
+-- them — see docs/implementation/vertical-slice/CONTRACT_FREEZE.md's migration-range
 -- table and EXECUTION_DAG.md's foundation-06 risk note.
 --
 -- provider_session_id is the provider's own session identifier (e.g.

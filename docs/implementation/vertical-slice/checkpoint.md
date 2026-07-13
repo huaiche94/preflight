@@ -99,7 +99,7 @@ fixed per errorlint's rule. No other files touched; no DAG node started.
 Assigned nodes this wave: `checkpoint-a01` (Part A: Progress Tree core
 migrations, 0020-0022) and `checkpoint-b01` (Part B: Repository Checkpoint
 core migration, 0030). First Part A work for this role. Pre-step: merged
-main (`ca7062f`, Wave 3 integration) into `day1/checkpoint` — clean
+main (`ca7062f`, Wave 3 integration) into `vertical-slice/checkpoint` — clean
 fast-forward, whole repo built and tested green before any new work.
 
 ### CROSS-ROLE CHANGE REQUEST (Constitution §4.4) — foundation, please fix
@@ -641,7 +641,7 @@ validation:
   - "golangci-lint run ./... (whole repo) -> 0 issues"
   - "go test ./... -race -> green whole-repo"
 commit: bedd7a7
-next_action: checkpoint-b09 (path traversal/symlink security gate) — NOT started this wave per explicit assignment; real restore (mutating) remains explicitly out of Day-1 scope per this node's own DAG risk note
+next_action: checkpoint-b09 (path traversal/symlink security gate) — NOT started this wave per explicit assignment; real restore (mutating) remains explicitly out of vertical-slice scope per this node's own DAG risk note
 assumptions:
   - "git apply --check semantics required a genuine correction mid-node: an initial test wrote a patch, then immediately ran ApplyCheck against the SAME already-staged index the patch was generated from — which fails, correctly, because the index has already moved PAST the patch's own pre-image ('before' state no longer exists to match against). This is not a bug in ApplyCheck; it is the realistic restore scenario being asked the wrong question. Fixed by resetting the index/working tree back to the patch's own base before dry-running the check — the actual scenario a restore dry-run answers ('if the target were at the patch's base, would this still apply'), verified against real `git apply --check` behavior in a scratch repo before committing to the permanent test suite."
   - "RepositoryIdentityMatch checks manifest.Repository.RepositoryID against a caller-supplied expectedRepositoryID (freshly resolved for the SAME WorktreeID via the same resolveWorktree seam Service.Create uses), NOT GitHead — HEAD legitimately moves between capture and a later restore attempt, and a stale HEAD is exactly what the apply-check step already covers; conflating the two would make ordinary, expected drift look like an identity problem."

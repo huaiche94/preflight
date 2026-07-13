@@ -1,7 +1,7 @@
-# Predictor — Day-1 Progress Artifact
+# Predictor — Vertical-Slice Progress Artifact
 
-Role packet: `agents/predictor.md`. Frozen contracts: `docs/implementation/day1/CONTRACT_FREEZE.md`.
-Branch: `day1/predictor`. This wave covered exactly the root nodes unblocked by `contract-integrator`
+Role packet: `agents/predictor.md`. Frozen contracts: `docs/implementation/vertical-slice/CONTRACT_FREEZE.md`.
+Branch: `vertical-slice/predictor`. This wave covered exactly the root nodes unblocked by `contract-integrator`
 per the frozen execution DAG: `predictor-02`, `predictor-03`, `predictor-04`.
 
 `predictor-01` (SQLite migrations 0040-0049) is **not** in this wave — it depends on `foundation-06`
@@ -80,7 +80,7 @@ blockers:
 ## Wave summary
 
 All three assigned nodes (`predictor-02`, `predictor-03`, `predictor-04`) are `completed` with durable
-artifacts (committed files) and passing validation commands, on branch `day1/predictor`, not pushed and
+artifacts (committed files) and passing validation commands, on branch `vertical-slice/predictor`, not pushed and
 not merged. No work was started on `predictor-01` (blocked on `foundation-06`) or `predictor-05`
 onward (blocked on this wave's nodes feeding forward into next wave), per the DAG and Constitution §6/§7.
 
@@ -91,7 +91,7 @@ as instructed.
 
 ## Wave 2 (predictor-05, predictor-06)
 
-Branch: `day1/predictor`, fast-forward-merged onto `main @ 4f96d7f` (Bootstrap + Wave 1 integration +
+Branch: `vertical-slice/predictor`, fast-forward-merged onto `main @ 4f96d7f` (Bootstrap + Wave 1 integration +
 ADR-041) by the lead before this wave started. Re-read CONSTITUTION.md, CONTRACT_FREEZE.md's
 "Predictor pipeline ports (ADR-041)" section, `docs/adr/0041-predictor-forecast-layer.md`,
 `internal/domain/forecast.go`, `internal/app/ports.go`'s ADR-041 section, and `agents/predictor.md`
@@ -152,7 +152,7 @@ blockers: []
 ## Wave 2 summary
 
 Both assigned nodes (`predictor-05`, `predictor-06`) are `completed` with durable artifacts and passing
-validation commands, on branch `day1/predictor`. `predictor-05b` (Token Forecaster) and `predictor-05c`
+validation commands, on branch `vertical-slice/predictor`. `predictor-05b` (Token Forecaster) and `predictor-05c`
 (Quota Forecaster) were deliberately not started — reserved for a future wave per explicit instruction,
 despite `predictor-05b` nominally depending on `predictor-05` which is now done. No `RuleTokenForecaster`
 or `RuleQuotaForecaster` (or anything satisfying the `TokenForecaster`/`QuotaForecaster` interfaces) was
@@ -191,7 +191,7 @@ Only the two named files were touched; no other role's paths were touched.
 
 ## Wave 3 (predictor-05b)
 
-Branch: `day1/predictor`, continuing from `4285e12` (Wave 2 + lint correction), already fully merged
+Branch: `vertical-slice/predictor`, continuing from `4285e12` (Wave 2 + lint correction), already fully merged
 into `main`. Re-read CONSTITUTION.md, CONTRACT_FREEZE.md's "Predictor pipeline ports (ADR-041)"
 section, `docs/adr/0041-predictor-forecast-layer.md`, `internal/domain/forecast.go`,
 `internal/app/ports.go`'s ADR-041 section, `agents/predictor.md`, `Preflight_ADD.md` §15.1-15.2, and
@@ -236,7 +236,7 @@ blockers: []
 ## Wave 3 summary
 
 The single assigned node (`predictor-05b`) is `completed` with durable artifacts and passing validation
-commands, on branch `day1/predictor`. `predictor-05c` (Quota Forecaster) and `predictor-07` (Risk
+commands, on branch `vertical-slice/predictor`. `predictor-05c` (Quota Forecaster) and `predictor-07` (Risk
 Combiner) were deliberately not started, per explicit instruction, despite `predictor-05c` nominally
 depending on `predictor-05b` which is now done. No `RuleQuotaForecaster`, `RiskCombiner` implementation,
 or anything beyond `RuleTokenForecaster` was written. No other role's paths were touched. No merge/rebase
@@ -246,7 +246,7 @@ onto `main` was performed or needed this wave.
 
 ## Wave 4 (predictor-01, predictor-05c)
 
-Branch: `day1/predictor`, continuing from `22fde28` (Wave 3, `predictor-05b`). Per explicit instruction,
+Branch: `vertical-slice/predictor`, continuing from `22fde28` (Wave 3, `predictor-05b`). Per explicit instruction,
 `main` was merged first (`git merge main -m "Sync main (Wave 3) before predictor-01/05c"`) — a clean
 fast-forward from `22fde28` to `ca7062f`, bringing in foundation-06/08, `predictor-05b`'s own already-merged
 copy, `runtime-b01`, `qa-01/08`, plus a large batch of previously-unmerged foundation infrastructure
@@ -279,7 +279,7 @@ next_action: predictor-05c (same wave, sequential)
 assumptions:
   - "Table set per Preflight_ADD.md §12.2's canonical schema, scoped to predictor's migration range (0040-0049 per CONTRACT_FREEZE.md): feature_vectors, predictions, runway_forecasts, policy_decisions, authorizations. No literal `evaluations` table exists in the ADD's §12.2 schema (domain.EvaluationID/app.Evaluation are backed by the `predictions` table plus policy_decisions, not a separate table) — the task instruction's 'evaluations/predictions/authorizations' phrasing is read as referring to this whole persistence surface (agents/predictor.md deliverable #11 'Evaluation persistence' + #12 'authorization issuance/consumption'), not a literal fifth table name."
   - "internal/storage/sqlite/migrate_test.go is owned by foundation (not one of predictor's exclusive paths). Per Constitution §4.4 ('a role never edits a file it doesn't own; it works around the gap with a documented assumption'), predictor-01's own migration-range validation lives in a new file, migrate_predictor_test.go, in the same shared sqlite_test package — additive only, no existing file touched. This exactly mirrors foundation-06's own established pattern of putting per-range migration tests directly in that package (TestAllMigrations_LoadsCoreSchemaFiles / TestCoreMigrations_*), with test names containing 'Migration0040' so the DAG's literal validation command selects them."
-  - "DISCOVERED INTEGRATION HAZARD (real, not hypothetical — flagging for contract-integrator/foundation): feature_vectors/predictions/runway_forecasts/authorizations conceptually FK into `turns` (claude-provider's 0010-0019 range) and authorizations also into `repository_checkpoints` (checkpoint Part B's 0030-0039 range), per the ADD's §12.2 schema. Neither table exists as a migration anywhere yet (checked day1/claude-provider and day1/checkpoint branches directly — no migration files present on either). SQLite's `PRAGMA foreign_keys = ON` (already set by db.go) does NOT merely skip-enforce a REFERENCES clause pointing at a nonexistent table until it's populated — it makes ANY cascading DELETE reachable through that table fail outright with 'no such table: main.turns', even for completely unrelated rows, because SQLite resolves every FK-referenced table in the schema's cascade graph at DML prepare time. This was caught empirically: adding these tables with real REFERENCES clauses broke 3 of foundation-06's own already-passing, already-merged tests (TestCoreMigrations_ForeignKeys_RepositoryToWorktree, TestCoreMigrations_ForeignKeys_TaskSessionSetNull, and indirectly the reopen tests) on a plain `DELETE FROM repositories` that has nothing to do with predictor's tables. Fix applied: turn_id (on feature_vectors/predictions/runway_forecasts/authorizations) and repository_checkpoint_id (on authorizations) are plain unconstrained TEXT columns with NO SQL-level FK — exactly the precedent 0004_tasks.sql already established for its own forward reference to progress_nodes ('SQLite has no deferred cross-table FK addition without recreating the table'). Documented in each migration file's own header. Real FKs are kept wherever the target table already exists on this branch: runway_forecasts.session_id -> provider_sessions (0003), runway_forecasts.task_id -> tasks (0004), and the two same-range FKs in policy_decisions -> predictions/runway_forecasts (0041/0042, this range)."
+  - "DISCOVERED INTEGRATION HAZARD (real, not hypothetical — flagging for contract-integrator/foundation): feature_vectors/predictions/runway_forecasts/authorizations conceptually FK into `turns` (claude-provider's 0010-0019 range) and authorizations also into `repository_checkpoints` (checkpoint Part B's 0030-0039 range), per the ADD's §12.2 schema. Neither table exists as a migration anywhere yet (checked vertical-slice/claude-provider and vertical-slice/checkpoint branches directly — no migration files present on either). SQLite's `PRAGMA foreign_keys = ON` (already set by db.go) does NOT merely skip-enforce a REFERENCES clause pointing at a nonexistent table until it's populated — it makes ANY cascading DELETE reachable through that table fail outright with 'no such table: main.turns', even for completely unrelated rows, because SQLite resolves every FK-referenced table in the schema's cascade graph at DML prepare time. This was caught empirically: adding these tables with real REFERENCES clauses broke 3 of foundation-06's own already-passing, already-merged tests (TestCoreMigrations_ForeignKeys_RepositoryToWorktree, TestCoreMigrations_ForeignKeys_TaskSessionSetNull, and indirectly the reopen tests) on a plain `DELETE FROM repositories` that has nothing to do with predictor's tables. Fix applied: turn_id (on feature_vectors/predictions/runway_forecasts/authorizations) and repository_checkpoint_id (on authorizations) are plain unconstrained TEXT columns with NO SQL-level FK — exactly the precedent 0004_tasks.sql already established for its own forward reference to progress_nodes ('SQLite has no deferred cross-table FK addition without recreating the table'). Documented in each migration file's own header. Real FKs are kept wherever the target table already exists on this branch: runway_forecasts.session_id -> provider_sessions (0003), runway_forecasts.task_id -> tasks (0004), and the two same-range FKs in policy_decisions -> predictions/runway_forecasts (0041/0042, this range)."
   - "Consequence for whole-repo `go test ./...`: after this fix, TestCoreMigrations_ForeignKeys_RepositoryToWorktree and TestCoreMigrations_ForeignKeys_TaskSessionSetNull (both in foundation's migrate_test.go) now PASS again. Two foundation tests still fail on this branch — TestAllMigrations_LoadsCoreSchemaFiles and TestCoreMigrations_FromEmptyDatabase/TestCoreMigrations_ReopenFromFile_AppliesOnce — but only because they hardcode `len(migrations) != 4` / `CurrentVersion != 4` as strict-equality assertions that assume foundation's 4 migrations are the *only* ones that will ever exist in the embedded directory. This is a pre-existing test-design limitation in a file predictor does not own and cannot fix without violating its path boundary; it will break the same way regardless of merge order the moment ANY other role's migration range lands (claude-provider, checkpoint, or predictor — whichever merges first). Flagged here for contract-integrator/foundation to relax those two assertions (e.g. `>=` instead of `==`) at the next integration point, not fixed unilaterally by this role."
   - "authorizations' UNIQUE(turn_id) constraint and predictor-10's future 'consumed_at IS NULL' service-layer check together implement CONTRACT_FREEZE.md's 'Authorization — one-time; consumption is exactly-once' contract; UNIQUE(turn_id) alone only guarantees exactly-once *issuance* per turn, not exactly-once *consumption* (that half is a service-layer transaction concern, deliberately out of scope for a migration-only node)."
 blockers: []
@@ -317,7 +317,7 @@ blockers: []
 ## Wave 4 summary
 
 Both assigned nodes (`predictor-01`, `predictor-05c`) are `completed` with durable artifacts and passing
-validation commands, on branch `day1/predictor`. `main` was merged first per instruction (clean
+validation commands, on branch `vertical-slice/predictor`. `main` was merged first per instruction (clean
 fast-forward, `22fde28` -> `ca7062f`), confirmed building/testing cleanly before any new code was
 written. `predictor-01` surfaced and fixed a real cross-role SQLite foreign-key hazard (documented above
 in its own `assumptions` block) that would otherwise have silently broken foundation-06's already-merged
@@ -332,15 +332,15 @@ final commit.
 
 ## Wave 5 (predictor-07)
 
-Branch: `day1/predictor`, continuing from `1fa92cf` (Wave 4, `predictor-01`/`predictor-05c`). Per explicit
+Branch: `vertical-slice/predictor`, continuing from `1fa92cf` (Wave 4, `predictor-01`/`predictor-05c`). Per explicit
 instruction, `origin/main` was merged first (`git fetch origin && git merge origin/main`) — a clean
 fast-forward from `1fa92cf` to `5470e4d`, bringing in Wave 4's integrated state (foundation-07,
 claude-provider-05, checkpoint-a01/b01, `predictor-01`/`predictor-05c` already-merged copies,
 runtime-a01/b02, `internal/app/wiring`, `internal/telemetry/claude`, new SQLite migrations 0010-0052,
 `internal/testutil/fakes`). Whole-repo `go build ./...` and `go test ./...` both passed cleanly
 immediately after the merge, before any new code was written. Re-read CONSTITUTION.md,
-`agents/predictor.md`, `docs/implementation/day1/EXECUTION_DAG.md` (`predictor-07`'s corrected entry),
-`docs/implementation/day1/CONTRACT_FREEZE.md`'s "Predictor pipeline ports (ADR-041)" section,
+`agents/predictor.md`, `docs/implementation/vertical-slice/EXECUTION_DAG.md` (`predictor-07`'s corrected entry),
+`docs/implementation/vertical-slice/CONTRACT_FREEZE.md`'s "Predictor pipeline ports (ADR-041)" section,
 `docs/adr/0041-predictor-forecast-layer.md` (including its "Terminology note" on `execution_risk` vs.
 `completion_risk`), `internal/app/ports.go`'s `RiskCombiner`/`CombineRiskRequest`/`CombineRiskResult`
 section, `internal/domain/forecast.go`, and `Preflight_ADD.md` §16.1-16.2/§16.3/§16.4 before starting, per
@@ -380,7 +380,7 @@ blockers: []
 ## Wave 5 summary
 
 The single assigned node (`predictor-07`) is `completed` with durable artifacts and passing validation
-commands, on branch `day1/predictor`. `origin/main` was merged first per instruction (clean fast-forward,
+commands, on branch `vertical-slice/predictor`. `origin/main` was merged first per instruction (clean fast-forward,
 `1fa92cf` -> `5470e4d`), confirmed building/testing cleanly before any new code was written.
 `internal/predictor/risk` is a new, self-contained, stateless package (no FeatureSource abstraction
 needed, matching `predictor-05c`'s precedent rather than `predictor-05`/`predictor-05b`'s) implementing
@@ -396,7 +396,7 @@ as of this wave's final commit.
 
 ## Wave 6 (predictor-08)
 
-Branch: `day1/predictor`, continuing from `216c92b` (Wave 5, `predictor-07`). Per explicit instruction,
+Branch: `vertical-slice/predictor`, continuing from `216c92b` (Wave 5, `predictor-07`). Per explicit instruction,
 `origin/main` was merged first (`git fetch origin && git merge origin/main`) — a clean fast-forward from
 `216c92b` to `abce1d0`, bringing in Wave 5's integrated state (`claude-provider-07`, `checkpoint-a02/a03/b04`,
 this role's own already-merged `predictor-07`, `runtime-a02/a06/b03/b04/b05/b08`, plus new packages
@@ -404,8 +404,8 @@ this role's own already-merged `predictor-07`, `runtime-a02/a06/b03/b04/b05/b08`
 `internal/scheduler`, `internal/gitx`, new CLI checkpoint/diagnostics commands, and expanded
 `internal/app/wiring`). Whole-repo `go build ./...` and `go test ./...` both passed cleanly immediately
 after the merge, before any new code was written. Re-read `CONSTITUTION.md`, `agents/predictor.md`,
-`docs/implementation/day1/EXECUTION_DAG.md` (`predictor-08`'s corrected entry — deps `predictor-07`,
-`predictor-06`, per ADR-041's "Policy consumes Runway directly" correction), `docs/implementation/day1/
+`docs/implementation/vertical-slice/EXECUTION_DAG.md` (`predictor-08`'s corrected entry — deps `predictor-07`,
+`predictor-06`, per ADR-041's "Policy consumes Runway directly" correction), `docs/implementation/vertical-slice/
 CONTRACT_FREEZE.md`'s "Predictor pipeline ports (ADR-041)" section, and `docs/adr/0041-predictor-forecast-
 layer.md` before starting, per instruction. Assigned exactly `predictor-08` (Policy) this wave.
 
@@ -446,7 +446,7 @@ blockers: []
 ## Wave 6 summary
 
 The single assigned node (`predictor-08`) is `completed` with durable artifacts and passing validation
-commands, on branch `day1/predictor`. `origin/main` was merged first per instruction (clean fast-forward,
+commands, on branch `vertical-slice/predictor`. `origin/main` was merged first per instruction (clean fast-forward,
 `216c92b` -> `abce1d0`), confirmed building/testing cleanly before any new code was written.
 `internal/policy` is a new, stateless package implementing ADD §17's Policy Engine (priority order §17.3,
 risk bands §16.5, debounce/emergency §17.6, calibrated-auto-pause §17.4) against the two direct
@@ -473,15 +473,15 @@ repository-wide as of this wave's final commit.
 
 ## Wave 7 (predictor-09)
 
-Branch: `day1/predictor`, continuing from `21c7dfd` (Wave 6, `predictor-08`). Per explicit instruction,
+Branch: `vertical-slice/predictor`, continuing from `21c7dfd` (Wave 6, `predictor-08`). Per explicit instruction,
 `origin/main` was merged first (`git fetch origin && git merge origin/main`) — a clean fast-forward from
 `21c7dfd` to `1440f4c`, bringing in Wave 6's integrated state (this role's own already-merged
 `predictor-08`, plus `checkpoint`'s Part A progress/state-checkpoint packages (`internal/pause`,
 `internal/progress`, `internal/redact`, `internal/scheduler`, `internal/statecheckpoint`) and new
 migrations `0023`/`0024`). Whole-repo `go build ./...` and `go test ./...` both passed cleanly immediately
 after the merge, before any new code was written. Re-read `CONSTITUTION.md`, `agents/predictor.md`,
-`docs/implementation/day1/EXECUTION_DAG.md` (`predictor-09`'s entry — deps `predictor-01`, `predictor-08`),
-`docs/implementation/day1/CONTRACT_FREEZE.md`, and `internal/app/ports.go`'s frozen `EvaluationService`
+`docs/implementation/vertical-slice/EXECUTION_DAG.md` (`predictor-09`'s entry — deps `predictor-01`, `predictor-08`),
+`docs/implementation/vertical-slice/CONTRACT_FREEZE.md`, and `internal/app/ports.go`'s frozen `EvaluationService`
 interface and DTO shapes before starting, per instruction. Assigned exactly `predictor-09` (Evaluation
 persistence) this wave.
 
@@ -520,7 +520,7 @@ validation:
 commit: <see final report>
 next_action: none — predictor-09 is the sole assigned Wave 7 node; predictor-10/predictor-11 explicitly out of scope, not started, stubbed, or scaffolded beyond what already had to exist for app.EvaluationService's ConsumeAuthorization method to compile and behave correctly
 assumptions:
-  - "A real, documented conflict exists between three sources for this wave: the task instructions (explicitly directing a full `ConsumeAuthorization` — exactly-once consumption, expiry, prompt/session binding, replay rejection — to be built as part of predictor-09, with required tests spelled out in detail), `docs/implementation/day1/EXECUTION_DAG.md` (which assigns that exact behavior to a separate downstream node, `predictor-10` — \"One-time authorization\", deps: predictor-09, its own dedicated `-run Authorization` validation gate), and migration `0044_authorizations.sql`'s own comment, written by this role in Wave 4, stating exactly-once consumption is \"enforced by predictor-10's service logic.\" Resolved by building `ConsumeAuthorization` for real, atomically, now — a Go interface cannot be partially implemented, and Constitution §7 rule 11 forbids declaring a task complete without durable evidence, so a stub would have been worse than either alternative — while documenting this conflict explicitly in `doc.go`'s \"ConsumeAuthorization scope note\" and treating predictor-10's own dedicated validation gate as still the authoritative place this behavior is re-verified/extended against real `runtime-a08`/`runtime-b06` integration needs in a later wave, per Constitution §4's \"works around the gap with a documented assumption\" instruction rather than silently picking one instruction and hiding the discrepancy."
+  - "A real, documented conflict exists between three sources for this wave: the task instructions (explicitly directing a full `ConsumeAuthorization` — exactly-once consumption, expiry, prompt/session binding, replay rejection — to be built as part of predictor-09, with required tests spelled out in detail), `docs/implementation/vertical-slice/EXECUTION_DAG.md` (which assigns that exact behavior to a separate downstream node, `predictor-10` — \"One-time authorization\", deps: predictor-09, its own dedicated `-run Authorization` validation gate), and migration `0044_authorizations.sql`'s own comment, written by this role in Wave 4, stating exactly-once consumption is \"enforced by predictor-10's service logic.\" Resolved by building `ConsumeAuthorization` for real, atomically, now — a Go interface cannot be partially implemented, and Constitution §7 rule 11 forbids declaring a task complete without durable evidence, so a stub would have been worse than either alternative — while documenting this conflict explicitly in `doc.go`'s \"ConsumeAuthorization scope note\" and treating predictor-10's own dedicated validation gate as still the authoritative place this behavior is re-verified/extended against real `runtime-a08`/`runtime-b06` integration needs in a later wave, per Constitution §4's \"works around the gap with a documented assumption\" instruction rather than silently picking one instruction and hiding the discrepancy."
   - "`Decide` reads back the `policy_decisions` row `EvaluateTurn` already computed and persisted for the given `EvaluationID`, rather than recomputing via `internal/policy.Decider`. This is directly evidenced, not guessed: `internal/orchestrator/evaluate.go` (already-merged, a sibling role's code) calls `Decide(ctx, app.DecideRequest{EvaluationID: evaluation.ID})` immediately after `EvaluateTurn`, with no risk/runway payload available to pass — `app.DecideRequest` itself carries only an `EvaluationID` field (frozen, `internal/app/ports.go`). Recomputing is not merely undesirable here, it is impossible from the inputs `Decide` actually receives. Documented explicitly in `doc.go`'s \"Decide: read-back, not recompute\" section, per `agents/predictor.md`'s own instruction to be explicit about this choice."
   - "`EvaluateTurn` does not itself compute a new `domain.RunwayForecast` — ADR-041 states the independent Runway Predictor plugs into `GracefulPauseService.Observe`, a different frozen port owned by `runtime`, and explicitly is not a `RiskCombiner` input. This node's `DataSource.RunwayForecast` method surfaces whatever the most recently computed forecast is (if any) purely so `policy.Decider`'s runway-driven PAUSE gate can be evaluated during the same pipeline call; a missing forecast (`hasRunway=false`, e.g. a brand-new session) degrades to the zero `domain.RunwayForecast{}`, which `policy.Decider` already treats as `Calibrated=false`/not-pause-worthy per its own documented fail-open discipline — no new degradation rule was invented here."
   - "`DataSource` is this package's own narrow bridge interface (not a frozen `internal/app` port), following the exact precedent already established by `internal/predictor/scope.FeatureSource` and `internal/predictor/token.FeatureSource`: `app.EvaluateTurnRequest` carries only `SessionID/TurnID/Provider/PromptHash` (frozen, privacy-contract-constrained — no raw prompt text, ever), so every other pipeline input (repository/task resolution, classification, repository/session/progress features, quota/context observations, prior-runway-hit-confirmed debounce bit) is resolved through this package-owned interface, satisfied by a test fake here and, in a later wave, by whatever concrete storage-backed lookup a wiring role provides. Two sibling stages' same-named `FeatureSource.Progress` methods have different signatures from each other (`scope.FeatureSource.Progress` takes `*domain.TaskID`; `token.FeatureSource.Progress` takes `domain.SessionID`) — confirmed by reading both side by side rather than assuming structural consistency; this package's test helper adapts `DataSource` to each stage's own `FeatureSource` explicitly, per method, rather than relying on struct-embedding promotion, which would have silently compiled the wrong method shape."
@@ -561,7 +561,7 @@ blockers: []
 ## Wave 7 summary
 
 The single assigned node (`predictor-09`) is `completed` with durable artifacts and passing validation
-commands, on branch `day1/predictor`. `origin/main` was merged first per instruction (clean fast-forward,
+commands, on branch `vertical-slice/predictor`. `origin/main` was merged first per instruction (clean fast-forward,
 `21c7dfd` -> `1440f4c`), confirmed building/testing cleanly before any new code was written.
 `internal/evaluation` is a new package implementing the frozen `app.EvaluationService` (ADD §9.9) by
 wiring together every prior predictor-role package into one real pipeline: Scope Estimator
@@ -592,7 +592,7 @@ finding in a first draft was caught and fixed before that final state).
 ## Wave 8 summary
 
 The single assigned node (`predictor-10`) is `completed` with durable artifacts and passing validation
-commands, on branch `day1/predictor`. `origin/main` was merged first per instruction (clean fast-forward,
+commands, on branch `vertical-slice/predictor`. `origin/main` was merged first per instruction (clean fast-forward,
 `efd0601` -> `2b7c29c`, bringing in Wave 7's integrated state), confirmed building/testing cleanly before
 any new code was written. This was an audit/hardening node against predictor-09's existing
 `ConsumeAuthorization`/`IssueAuthorization` implementation, not a rebuild — predictor-09's own code, the
@@ -625,15 +625,15 @@ commit).
 
 ## Wave 9 (predictor-11 — final DAG node)
 
-Branch: `day1/predictor`, continuing from `379b7cf` (Wave 8, `predictor-10`). Per explicit instruction,
+Branch: `vertical-slice/predictor`, continuing from `379b7cf` (Wave 8, `predictor-10`). Per explicit instruction,
 `origin/main` was merged first (`git fetch origin && git merge origin/main`) — a clean fast-forward from
 `379b7cf` to `36e7ffb`, bringing in Wave 8's integrated state (`checkpoint-a06/a08/b08` plus a tracked-diff
 redaction fix, this role's own already-merged `predictor-10`, `runtime-a08`, `qa-04`, and new packages
 `internal/gitx/patch.go`, `internal/pause/resumevalidation.go`, `internal/repocheckpoint/patchredact.go` +
 `restoredryrun.go`, `internal/statecheckpoint/reconcile.go`). Whole-repo `go build ./...` and
 `go test ./...` both passed cleanly immediately after the merge, before any new code was written. Re-read
-`CONSTITUTION.md`, `agents/predictor.md` in full (especially "Required tests"), `docs/implementation/day1/
-EXECUTION_DAG.md`'s `predictor-11` entry, `docs/implementation/day1/CONTRACT_FREEZE.md`,
+`CONSTITUTION.md`, `agents/predictor.md` in full (especially "Required tests"), `docs/implementation/vertical-slice/
+EXECUTION_DAG.md`'s `predictor-11` entry, `docs/implementation/vertical-slice/CONTRACT_FREEZE.md`,
 `docs/adr/0041-predictor-forecast-layer.md`, and every prior wave's own artifacts
 (`internal/features/**`, `internal/predictor/{quantile,scope,token,quota,runway,risk}/**`,
 `internal/policy/**`, `internal/evaluation/**`) before starting, per instruction.
@@ -677,7 +677,7 @@ blockers: []
 ## Wave 9 summary
 
 The single assigned node (`predictor-11`) is `completed` with durable artifacts and passing validation
-commands, on branch `day1/predictor`. `origin/main` was merged first per instruction (clean fast-forward,
+commands, on branch `vertical-slice/predictor`. `origin/main` was merged first per instruction (clean fast-forward,
 `379b7cf` -> `36e7ffb`), confirmed building/testing cleanly before any new code was written. This is the
 predictor role's final assigned DAG node: **every node from `predictor-01` through `predictor-11` is now
 `completed`**, closing out this role's full scope (`internal/features/**`, `internal/predictor/**`,

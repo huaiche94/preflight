@@ -4,7 +4,7 @@
 // evaluation.Service (EvaluateTurn -> Decide -> ConsumeAuthorization), not
 // through any individual stage's own package-level tests.
 //
-// docs/implementation/day1/EXECUTION_DAG.md's predictor-11 entry: "this
+// docs/implementation/vertical-slice/EXECUTION_DAG.md's predictor-11 entry: "this
 // node's job is not to build new features, but to prove your ENTIRE
 // pipeline ... works correctly END-TO-END, under realistic combined load,
 // and is fast enough." Its own validation command

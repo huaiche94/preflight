@@ -17,7 +17,7 @@ type, and `internal/app/ports.go`'s `Evaluation` struct is a thin shape
 that does not carry any of them. `ScopeEstimate` (§14.1) was fully
 specified in the ADD but likewise never implemented.
 
-The frozen Day-1 execution DAG (`docs/implementation/day1/EXECUTION_DAG.md`)
+The frozen execution DAG (`docs/implementation/vertical-slice/EXECUTION_DAG.md`)
 inherited the same gap: `predictor-05` (Scope Estimator) feeds directly
 into `predictor-07` (Risk Combiner), with `predictor-06` (Runway Forecaster)
 also listed as a `predictor-07` dependency. But `Preflight_ADD.md` §16.2's
@@ -152,7 +152,7 @@ ADR removes it.
   ADR list are updated to reflect this decision.
 - `CONTRACT_FREEZE.md` gains a new section documenting the four interfaces,
   the reason-code taxonomy, and the `Evaluation.ReasonCodes` type change.
-- The Day-1 execution DAG gains two new predictor nodes and three corrected
+- The execution DAG gains two new predictor nodes and three corrected
   dependency edges; total remaining predictor task count for Wave 2+
   increases by 2 (from 6 remaining after Wave 1 to 8).
 - The Wave 2 predictor assignment proposed before this ADR is superseded —

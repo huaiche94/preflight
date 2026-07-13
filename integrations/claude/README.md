@@ -3,7 +3,7 @@
 Status: **forward-looking stub.** The `preflight` CLI binary and its `hook
 claude ...` subcommands do not exist yet on this branch — that is
 `runtime-b01`'s deliverable (Part B, `agents/runtime.md`), not this role's.
-Per `docs/implementation/day1/EXECUTION_DAG.md`'s own note on
+Per `docs/implementation/vertical-slice/EXECUTION_DAG.md`'s own note on
 `claude-provider-06` ("Needs `runtime-b01` CLI skeleton for true
 end-to-end (stub acceptable before then)"), the files here are example
 configuration only: syntactically valid, internally consistent with this
@@ -30,7 +30,7 @@ Two governing documents name the same subcommands with different casing:
   — PascalCase, matching Claude Code's own wire-level `hook_event_name`
   field exactly.
 - `agents/runtime.md`'s P0 commands list and
-  `docs/implementation/day1/EXECUTION_DAG.md`'s own validation command for
+  `docs/implementation/vertical-slice/EXECUTION_DAG.md`'s own validation command for
   this node (`claude-provider-06`) both write
   `preflight hook claude user-prompt-submit` — kebab-case.
 

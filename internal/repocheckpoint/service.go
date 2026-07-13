@@ -144,7 +144,7 @@ func (s *Service) Verify(ctx context.Context, id domain.RepositoryCheckpointID) 
 // restoring req.ID's checkpoint onto its worktree's CURRENT state would
 // succeed (restoredryrun.go's full ADD §19.6 check sequence), but never
 // mutates the working tree, index, or refs — actual restore-that-mutates
-// remains explicitly out of Day-1 scope (this node's own DAG risk note:
+// remains explicitly out of vertical-slice scope (this node's own DAG risk note:
 // "actual restore is stretch/deferred"), so RestoreResult.Applied is
 // always false here, whether or not the dry-run would have succeeded.
 //

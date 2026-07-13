@@ -1,7 +1,7 @@
-// e2e_highrisk_test.go implements qa-02 (docs/implementation/day1/
+// e2e_highrisk_test.go implements qa-02 (docs/implementation/vertical-slice/
 // EXECUTION_DAG.md's qa-02 row; agents/qa.md deliverable #2: "One
 // end-to-end high-risk Claude fixture flow"). Per the DAG's own framing,
-// this is THE literal Day-1 demo: "Cannot start meaningfully until all six
+// this is THE literal vertical-slice demo: "Cannot start meaningfully until all six
 // upstream tasks are real" — claude-provider-07, checkpoint-a09,
 // checkpoint-b09, predictor-11, runtime-a11, runtime-b10 — and, as of this
 // wave (Waves 8-11 merged), every one of them is.

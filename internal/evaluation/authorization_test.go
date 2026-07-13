@@ -3,7 +3,7 @@
 // This file is the dedicated adversarial audit of Service.ConsumeAuthorization/
 // IssueAuthorization (agents/predictor.md deliverable #12: "one-time
 // authorization issuance/consumption with prompt/session/evaluation binding,
-// expiry, and replay rejection"), per docs/implementation/day1/EXECUTION_DAG.md's
+// expiry, and replay rejection"), per docs/implementation/vertical-slice/EXECUTION_DAG.md's
 // predictor-10 node ("High — replay protection is a security control"). Its
 // validation gate is `go test ./internal/evaluation/... -run Authorization`,
 // so every test in this file is named to be readable in isolation by an
@@ -29,7 +29,7 @@
 // check even when the authorization itself was bound to a real prompt hash).
 // Every other adversarial scenario in this file passed on the first try
 // against predictor-09's existing logic — see the wave's progress artifact
-// (docs/implementation/day1/predictor.md, node predictor-10) for the full
+// (docs/implementation/vertical-slice/predictor.md, node predictor-10) for the full
 // enumeration of what was tested and which passed pre-existing vs. needed
 // the fix.
 package evaluation_test

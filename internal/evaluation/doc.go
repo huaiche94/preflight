@@ -3,7 +3,7 @@
 // hook handler and runtime orchestrator calls through, never a concrete
 // predictor/policy type directly.
 //
-// This is predictor-09 (docs/implementation/day1/EXECUTION_DAG.md,
+// This is predictor-09 (docs/implementation/vertical-slice/EXECUTION_DAG.md,
 // agents/predictor.md deliverable #11, "Evaluation persistence"), deps
 // predictor-01 (this package's own migrations/0040-0044_*.sql) and
 // predictor-08 (internal/policy.Decider). Per agents/predictor.md's own
@@ -59,7 +59,7 @@
 //
 // # ConsumeAuthorization scope note (predictor-09 vs predictor-10)
 //
-// docs/implementation/day1/EXECUTION_DAG.md defines a separate downstream
+// docs/implementation/vertical-slice/EXECUTION_DAG.md defines a separate downstream
 // node, predictor-10 ("One-time authorization", deps: predictor-09,
 // validation `go test ./internal/evaluation/... -run Authorization`), and
 // migration 0044_authorizations.sql's own comment (written by this role in
@@ -101,7 +101,7 @@
 // sequential replay loops, replay racing the expiry boundary,
 // nanosecond-adjacent expiry boundaries, whitespace/case/unicode-
 // normalization variants on the binding fields — passed against predictor-09's
-// existing logic unchanged. See docs/implementation/day1/predictor.md's
+// existing logic unchanged. See docs/implementation/vertical-slice/predictor.md's
 // predictor-10 entry for the full account.
 //
 // # Boundary (agents/predictor.md)

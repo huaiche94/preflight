@@ -18,13 +18,13 @@
 // Appendix E.3 spells Claude Code hook subcommands in PascalCase (e.g.
 // "UserPromptSubmit"), matching Claude's own hook-event-name casing. Three
 // other frozen documents — agents/runtime.md's own P0 command list, this
-// node's DAG validation command, and the Day-1 execution plan's demo
+// node's DAG validation command, and the vertical-slice execution plan's demo
 // script — independently use kebab-case ("user-prompt-submit"). This
 // discrepancy is tracked but not yet resolved by an ADR; see
-// docs/implementation/day1/wave2-analysis/ADR_Recommendations.md REC-03.
+// docs/implementation/vertical-slice/wave2-analysis/ADR_Recommendations.md REC-03.
 // This package follows kebab-case, matching agents/runtime.md verbatim (the
 // document that is authoritative for this role's command surface per
 // CONSTITUTION.md §2 priority order) and the DAG's own `preflight --help`
 // validation expectation. This is a documented judgment call, not a silent
-// third answer — see docs/implementation/day1/runtime.md.
+// third answer — see docs/implementation/vertical-slice/runtime.md.
 package cli

@@ -1,8 +1,8 @@
 name: CI
 
-# Day-1 CI scaffold (qa-01). Mirrors Preflight_ADD.md §30.3's ci.yml jobs
+# vertical-slice CI scaffold (qa-01). Mirrors Preflight_ADD.md §30.3's ci.yml jobs
 # (format / vet / golangci-lint / unit+integration / race / build) that are
-# in scope for the current Day-1 vertical slice. VS Code lint/test/build,
+# in scope for the current vertical slice. VS Code lint/test/build,
 # JSON Schema checks, docs link/fence checks, and migration tests are not
 # yet applicable — no vscode/ tree, no JSON Schema artifacts, and no
 # migration files exist yet in this wave (foundation-06 is still pending)

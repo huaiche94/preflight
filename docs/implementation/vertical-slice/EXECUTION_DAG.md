@@ -1,9 +1,9 @@
-# Preflight Day-1 Execution DAG
+# Preflight Execution DAG
 
 | Field | Value |
 |---|---|
-| Source | `Preflight_ADD.md` + `Preflight_Day1_Parallel_Execution_Plan.md` + `agents/*.md` (canonical per those docs) |
-| Scope | Full task-level breakdown of the Day-1 seven-role vertical slice |
+| Source | `Preflight_ADD.md` + `Preflight_Parallel_Execution_Plan.md` + `agents/*.md` (canonical per those docs) |
+| Scope | Full task-level breakdown of the vertical-slice seven-role vertical slice |
 | Status | **Wave 1 integrated (`main` @ `3fb37ce`). Amended 2026-07-12 per ADR-041 (predictor forecast layer) before Wave 2 implementation begins.** |
 | Supersedes | The earlier nine-role (`A00`–`A08`) version of this document, archived in git history at commit `f1d9065` and referenced from `docs/archive/agent-packets-v1/`. |
 | Amendments | `docs/adr/0041-predictor-forecast-layer.md` — inserted `predictor-05b`/`predictor-05c`, corrected `predictor-07`/`predictor-08`/`predictor-11` dependency edges. See §5 Summary for the resulting task-count delta. |
@@ -17,7 +17,7 @@ Unchanged from the prior version: each role's deliverables/required-tests
 list was decomposed into individually-mergeable tasks
 (`<role>-<seq>`, or `<role>-<part><seq>` for the two roles that internally
 keep a Part A / Part B split). Task IDs now match the coordination-artifact
-convention already established in `Preflight_Day1_Parallel_Execution_Plan.md`
+convention already established in `Preflight_Parallel_Execution_Plan.md`
 §9 (`node: predictor-03`) instead of the old `A05-03` form.
 
 **Two roles carry two internal parts** — `checkpoint` (Part A = Progress
@@ -46,7 +46,7 @@ worktree/branch delivers both, in the order given below.
    change.
 
 **Merge order** below is the stage number from
-`Preflight_Day1_Parallel_Execution_Plan.md` §10 (0 = `contract-integrator`
+`Preflight_Parallel_Execution_Plan.md` §10 (0 = `contract-integrator`
 contract freeze, 1 = `foundation`, 2 = `claude-provider`/`checkpoint`/
 `predictor` parallel, 3 = `runtime`, 4 = `qa`, 5 = `contract-integrator`
 final integration).
@@ -122,7 +122,7 @@ final integration).
 | checkpoint-b05 | checkpoint-b04 | M | 300 | 3 | `go test ./internal/repocheckpoint/... -run Patch` | 2 | Medium — binary-safety edge cases | None |
 | checkpoint-b06 | checkpoint-b04 | M | 300 | 4 | `go test ./internal/repocheckpoint/... ./internal/redact/... -run Untracked` | 2 | High — secret/path filtering is a security control | Feeds `qa-05` leakage scanner |
 | checkpoint-b07 | checkpoint-b04, -b05, -b06 | M | 250 | 3 | `go test ./internal/repocheckpoint/... -run Atomic -race` | 2 | Medium | None |
-| checkpoint-b08 | checkpoint-b07 | M | 250 | 3 | `go test ./internal/repocheckpoint/... -run RestoreDryRun` | 2 | Low — actual restore is stretch/deferred | Real restore is out of Day-1 scope |
+| checkpoint-b08 | checkpoint-b07 | M | 250 | 3 | `go test ./internal/repocheckpoint/... -run RestoreDryRun` | 2 | Low — actual restore is stretch/deferred | Real restore is out of vertical-slice scope |
 | checkpoint-b09 | checkpoint-b07, checkpoint-b08 | L | 450 | 10 | `go test ./internal/repocheckpoint/... ./internal/gitx/... -race` | 2 | High — path traversal/symlink escape tests are a security gate | Feeds `qa-06` |
 
 ### predictor (Stage 2)
@@ -182,7 +182,7 @@ role/branch, this is a real sequencing dependency now, not a soft one.
 | ID | Dependencies | Complexity | Est. LOC | Est. Files | Validation command | Merge order | Risk | Blockers |
 |---|---|---|---|---|---|---|---|---|
 | qa-01 | foundation-09, contract-integrator-07 | S | 200 | 4 | CI green on a trivial PR (Ubuntu/macOS/Windows) | 4 | Low | None |
-| qa-02 | claude-provider-07, checkpoint-a09, checkpoint-b09, predictor-11, runtime-a11, runtime-b10 | L | 400 | 6 | `go test ./internal/integrationtest/... -run E2EHighRisk` | 4 | High — this is the literal Day-1 demo | Cannot start meaningfully until all six upstream tasks are real |
+| qa-02 | claude-provider-07, checkpoint-a09, checkpoint-b09, predictor-11, runtime-a11, runtime-b10 | L | 400 | 6 | `go test ./internal/integrationtest/... -run E2EHighRisk` | 4 | High — this is the literal vertical-slice demo | Cannot start meaningfully until all six upstream tasks are real |
 | qa-03 | foundation-07, runtime-b10 | M | 200 | 2 | `go test ./internal/integrationtest/... -run RestartSameDB` | 4 | Medium | None |
 | qa-04 | claude-provider-05, checkpoint-a07 | M | 200 | 2 | `go test ./internal/integrationtest/... -run 'Duplicate|OutOfOrder'` | 4 | Medium | None |
 | qa-05 | claude-provider-07, checkpoint-b06 | M | 250 | 3 | `go test ./internal/integrationtest/... -run LeakageScanner` | 4 | **High — scans DB export/logs/manifests for raw prompt and secrets** | Constitution §7 invariant; any hit blocks merge |
@@ -385,7 +385,7 @@ flowchart TD
 
 *Solid arrows = hard merge-blocking dependency. Dotted arrows labeled
 "soft" = the downstream task may begin against `internal/testutil/fakes`
-per the Day-1 plan's topology note, but needs the real upstream component
+per the vertical-slice plan's topology note, but needs the real upstream component
 before it can merge/pass integration tests. Note that `runtime-b07`'s
 dependency on `runtime-a04`/`runtime-a06` is drawn **solid** — under the
 9-role structure this was soft (cross-role); under the 7-role structure

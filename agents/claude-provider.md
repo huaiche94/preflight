@@ -18,7 +18,7 @@ integrations/claude/**
 testdata/provider-events/claude/**
 internal/storage/sqlite/migrations/0010-0019_*.sql
 docs/providers/claude/**
-docs/implementation/day1/claude-provider.md
+docs/implementation/vertical-slice/claude-provider.md
 ```
 
 ## Mission

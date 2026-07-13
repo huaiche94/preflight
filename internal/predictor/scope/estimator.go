@@ -69,7 +69,7 @@ func NewRuleScopeEstimator(source FeatureSource) *RuleScopeEstimator {
 var _ app.ScopeEstimator = (*RuleScopeEstimator)(nil)
 
 // EstimateScope implements app.ScopeEstimator. Per the predictor-05 scope
-// (docs/implementation/day1/EXECUTION_DAG.md), it populates only
+// (docs/implementation/vertical-slice/EXECUTION_DAG.md), it populates only
 // FilesReadP50/P80/P90, FilesChangedP50/P80/P90, LinesChangedP50/P80/P90,
 // the boolean requirement flags, Confidence/Calibrated/ReasonCodes.
 // ToolCallsP50/P90, VerificationP50/P90, RetryLoopsP50/P90, and

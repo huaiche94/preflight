@@ -1,5 +1,5 @@
 // Package idgen provides the real implementation of internal/domain's
-// IDGenerator interface. Per docs/implementation/day1/CONTRACT_FREEZE.md,
+// IDGenerator interface. Per docs/implementation/vertical-slice/CONTRACT_FREEZE.md,
 // all Preflight-owned entity IDs are UUIDv7 at generation time, generated
 // here and never parsed for meaning by callers.
 package idgen

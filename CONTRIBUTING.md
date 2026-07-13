@@ -80,8 +80,8 @@ of them.
 ## Making a change
 
 1. Confirm the change fits the current milestone/wave (see
-   `README.md`'s "Day-1 wave roadmap" and
-   `docs/implementation/day1/EXECUTION_DAG.md`).
+   `README.md`'s "Wave roadmap" and
+   `docs/implementation/vertical-slice/EXECUTION_DAG.md`).
 2. Confirm the files you need to touch are inside a path you're allowed
    to edit (see "Ground rules" above).
 3. Write tests. Untested behavior is not considered complete per

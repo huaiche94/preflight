@@ -4,7 +4,7 @@
 // fixture payloads, plus the cross-cutting raw-prompt-absence privacy gate
 // named in agents/claude-provider.md's Tests section ("raw-prompt absence
 // assertion across persisted rows/log output") and required by
-// docs/implementation/day1/EXECUTION_DAG.md's claude-provider-07 entry
+// docs/implementation/vertical-slice/EXECUTION_DAG.md's claude-provider-07 entry
 // ("Risk: Medium - raw-prompt-absence assertion is a hard privacy gate.
 // Feeds qa-05 leakage scanner").
 //

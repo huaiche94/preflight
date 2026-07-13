@@ -18,7 +18,7 @@ internal/integrationtest/**
 testdata/e2e/**
 testdata/security/**
 docs/security/**
-docs/implementation/day1/qa.md
+docs/implementation/vertical-slice/qa.md
 SECURITY.md
 CONTRIBUTING.md
 CODE_OF_CONDUCT.md

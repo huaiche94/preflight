@@ -217,7 +217,7 @@ type PersistDeps struct {
 	// speculative new abstractions). checkpoint-a04's real Progress Tree
 	// side is integrated this wave, but Snapshot is used here as a FAKE
 	// this wave per the task brief's explicit instruction -- see this
-	// package's persistphase_test.go and docs/implementation/day1/
+	// package's persistphase_test.go and docs/implementation/vertical-slice/
 	// runtime.md's Wave 7 section for why (no dedicated frozen service
 	// port beyond the general ProgressTreeService exists specifically for
 	// this call site, and the task brief names it fake-able regardless).

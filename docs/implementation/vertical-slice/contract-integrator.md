@@ -22,7 +22,7 @@ artifacts:
   - internal/app/ports.go
   - pkg/protocol/v1/event.go
   - pkg/protocol/v1/event_test.go
-  - docs/implementation/day1/CONTRACT_FREEZE.md
+  - docs/implementation/vertical-slice/CONTRACT_FREEZE.md
   - go.mod
 validation:
   - gofmt -l internal/domain internal/app pkg/protocol   # empty output

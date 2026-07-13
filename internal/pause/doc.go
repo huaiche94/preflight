@@ -10,7 +10,7 @@
 //
 // # Frozen state enum vs. agents/runtime.md's "Required state path"
 //
-// docs/implementation/day1/CONTRACT_FREEZE.md freezes exactly twelve
+// docs/implementation/vertical-slice/CONTRACT_FREEZE.md freezes exactly twelve
 // domain.PauseStatus wire strings (internal/domain/status.go):
 //
 //	predicted, requested, quiescing, checkpointing, interrupting, sleeping,

@@ -34,7 +34,7 @@ import (
 var _ app.TxRunner = (*DB)(nil)
 
 // Pragmas are Preflight's fixed SQLite connection settings, per
-// Preflight_ADD.md §12.1 / docs/implementation/day1/CONTRACT_FREEZE.md.
+// Preflight_ADD.md §12.1 / docs/implementation/vertical-slice/CONTRACT_FREEZE.md.
 // These are load-bearing for every later role's storage code: WAL mode and
 // a busy timeout are what make concurrent daemon+CLI access to the same
 // database file safe instead of returning SQLITE_BUSY immediately.

@@ -5,7 +5,7 @@
 | Phase | 3.10 — Post Wave 2 Analysis |
 | Status | **Recommendation only. No teammates assigned. No execution. Wait for approval.** |
 | Precondition assumed | This analysis treats Wave 2's four branches as if integrated (per DAG dependency semantics), since they were independently verified, validated, and are the immutable Wave 2 record per this phase's own framing. **They have not actually been merged into `main`** — that merge itself is a pending action this document does not perform and is not authorized to perform. |
-| Inputs used | `docs/implementation/day1/EXECUTION_DAG.md` (frozen), `Preflight_Predictor_Design_Supplement.md`, `Prediction_Error_Report.md`, `Missing_Telemetry_Report.md`, `Feature_Registry.md`, `Prediction_Confidence_Report.md`, `Feature_Gap_Report.md`, `ADR_Recommendations.md` |
+| Inputs used | `docs/implementation/vertical-slice/EXECUTION_DAG.md` (frozen), `Preflight_Predictor_Design_Supplement.md`, `Prediction_Error_Report.md`, `Missing_Telemetry_Report.md`, `Feature_Registry.md`, `Prediction_Confidence_Report.md`, `Feature_Gap_Report.md`, `ADR_Recommendations.md` |
 
 ## 1. Newly unlocked nodes
 
@@ -102,7 +102,7 @@ invented.
 | LOC | DAG: 350. Adjusted: ~731 (350 × 2.089) | Observed / Derived | Low-Medium | Wide |
 | Duration | ~30 min (Derived reference-class mean from this wave's M-complexity self-reports: `foundation-03` ~25min, `foundation-05` ~45min, `checkpoint-b03` ~20min — wide spread, mean is a weak central estimate) | Derived (weak, n=3, spread 20-45min) | Low | ±15 min plausible — wider than the S-complexity reference class |
 | Token usage | Unknown | Unknown | 0.0 | N/A |
-| Complexity | M (DAG) | Observed | Medium | This node explicitly cannot touch `cmd/preflight/main.go` (owned by `contract-integrator`/`foundation` per the Day-1 plan) — meaning its actual merge requires lead coordination beyond a typical single-role M node, a cost the DAG's complexity label doesn't capture |
+| Complexity | M (DAG) | Observed | Medium | This node explicitly cannot touch `cmd/preflight/main.go` (owned by `contract-integrator`/`foundation` per the vertical-slice plan) — meaning its actual merge requires lead coordination beyond a typical single-role M node, a cost the DAG's complexity label doesn't capture |
 | Execution risk | Low — DAG's own text | Observed | Medium — the root-wiring-coordination requirement is a real, DAG-invisible integration risk even though the DAG's own risk column says "Low," similar to how `Calibration_Report.md` found DAG risk labels sometimes miss integration-shaped risk vs. implementation-shaped risk | Recommend treating this as Low-Medium, not simply Low |
 
 ### qa-01 (CI scaffolding)

@@ -12,7 +12,7 @@
 //
 // RiskCombiner and the Runway Predictor are Policy's two direct inputs.
 // Policy does NOT consume Runway through RiskCombiner — ADR-041 corrected
-// the Day-1 execution DAG specifically because the original
+// the execution DAG specifically because the original
 // predictor-07->predictor-06 edge conflated two independent questions
 // ("how risky is this turn" vs "is a quota limit imminent within 10
 // minutes"). CONTRACT_FREEZE.md's "Predictor pipeline ports (ADR-041)"

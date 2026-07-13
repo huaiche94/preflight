@@ -5785,7 +5785,7 @@ Combiner 的輸入。四個新窄介面凍結於 `internal/app/ports.go`：
 `ScopeEstimator`、`TokenForecaster`、`QuotaForecaster`、`RiskCombiner`。
 
 **Consequence：** §7.3 C4 diagram、§9.9 service contracts、§15、§16 同步更新；
-Day-1 execution DAG 新增 `predictor-05b`（Token Forecaster）、`predictor-05c`
+execution DAG 新增 `predictor-05b`（Token Forecaster）、`predictor-05c`
 （Quota Forecaster），並修正 `predictor-07`／`predictor-08`／`predictor-11`
 的 dependency edges。詳見 `docs/adr/0041-predictor-forecast-layer.md`。
 

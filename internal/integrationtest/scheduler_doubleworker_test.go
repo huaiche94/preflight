@@ -1,4 +1,4 @@
-// scheduler_doubleworker_test.go implements qa-07 (docs/implementation/day1/
+// scheduler_doubleworker_test.go implements qa-07 (docs/implementation/vertical-slice/
 // EXECUTION_DAG.md's qa-07 row; agents/qa.md deliverable #7: "Scheduler
 // double-worker/lease race test").
 //
@@ -9,7 +9,7 @@
 // that targets internal/scheduler/... directly — but that is runtime's
 // EXCLUSIVE path (agents/runtime.md), not one of qa's own exclusive paths
 // (.github/**, internal/integrationtest/**, testdata/e2e/**,
-// testdata/security/**, docs/security/**, docs/implementation/day1/qa.md,
+// testdata/security/**, docs/security/**, docs/implementation/vertical-slice/qa.md,
 // SECURITY.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, GOVERNANCE.md — see
 // agents/qa.md). qa may not touch internal/scheduler/** or internal/pause/**
 // themselves per Constitution Sec4.2/Sec4.3 ("a role may only modify files

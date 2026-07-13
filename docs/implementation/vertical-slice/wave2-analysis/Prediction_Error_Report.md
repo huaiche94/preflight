@@ -18,7 +18,7 @@ clock access), **Derived** (computed from other values), or **Unknown**
 
 Two structural facts constrain this entire report and recur in every row:
 
-1. **The frozen DAG (`docs/implementation/day1/EXECUTION_DAG.md`) has no
+1. **The frozen DAG (`docs/implementation/vertical-slice/EXECUTION_DAG.md`) has no
    duration field and no token field anywhere, for any node.** Every
    `estimated_duration` and `estimated_token_usage` cell below is
    therefore `Unknown` — not a small number, not zero. This is the
@@ -236,7 +236,7 @@ presented as if it were per-node data.
 |---|---|---|---|---|---|
 | Files changed | 4 | 4 (self-reported: `doc.go, coldstart.go, estimator.go, estimator_test.go`; not independently re-diffed per-node since predictor-05/06 share one lead-side diff against the Wave 1 tip) | Observed (est.) / Estimated (self-reported, not independently split by lead) | 0 | 0% |
 | Files read | Unknown | Unknown | Unknown / Unknown | — | — |
-| LOC | 300 | Not separable — predictor-05 and predictor-06 together total 1,424 insertions across 8 files (`git diff --stat 4f96d7f..HEAD` on `day1/predictor`); no independently-verified per-node split exists | Observed / Unknown (per-node) | — | — |
+| LOC | 300 | Not separable — predictor-05 and predictor-06 together total 1,424 insertions across 8 files (`git diff --stat 4f96d7f..HEAD` on `vertical-slice/predictor`); no independently-verified per-node split exists | Observed / Unknown (per-node) | — | — |
 | Duration | Unknown | Unknown | Unknown / Unknown | — | — |
 | Token usage | Unknown | Shared Wave 2 total — this teammate's invocation totaled 138,172 across -05 and -06; no per-node split exists | Unknown / Unknown (per-node) | — | — |
 | Complexity | M | M (held) | Observed / Derived | 0 | 0% |

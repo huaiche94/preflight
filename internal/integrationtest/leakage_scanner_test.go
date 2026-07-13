@@ -1,4 +1,4 @@
-// leakage_scanner_test.go implements qa-05 (docs/implementation/day1/
+// leakage_scanner_test.go implements qa-05 (docs/implementation/vertical-slice/
 // EXECUTION_DAG.md's qa-05 row; agents/qa.md deliverable #5: "Raw-prompt
 // and secret leakage scanner over DB export/logs/checkpoint manifests").
 //
@@ -620,7 +620,7 @@ func TestLeakageScanner_Falsifiability_DetectsPlantedSecretInRawFile(t *testing.
 // already staged/committed in a TRACKED file was captured verbatim into
 // staged.patch.gz with no filtering at all. This was qa-05's P1 finding.
 //
-// Fix: day1/checkpoint commit f981bde ("checkpoint: extend secret scanning
+// Fix: vertical-slice/checkpoint commit f981bde ("checkpoint: extend secret scanning
 // to tracked-file diff content (fixes qa-05 P1 finding)") added
 // internal/repocheckpoint/patchredact.go, wired into Capture (capture.go)
 // immediately after DiffPatch and before archiving. It scans each "+"/"-"
@@ -641,11 +641,11 @@ func TestLeakageScanner_Falsifiability_DetectsPlantedSecretInRawFile(t *testing.
 // to keep patches usable for checkpoint-b08's restore dry-run.
 //
 // NOTE: this test was updated based on a code review of
-// day1/checkpoint@f981bde's patchredact.go/capture.go (read via `git show`,
+// vertical-slice/checkpoint@f981bde's patchredact.go/capture.go (read via `git show`,
 // per this wave's instructions — checkpoint's branch was not merged into
-// day1/qa). It cannot pass on this branch alone yet, since
+// vertical-slice/qa). It cannot pass on this branch alone yet, since
 // internal/repocheckpoint/patchredact.go does not exist here until the
-// lead integrates day1/checkpoint into this branch. It is expected to pass
+// lead integrates vertical-slice/checkpoint into this branch. It is expected to pass
 // once that integration lands; do not treat a failure here, before that
 // integration, as a regression.
 func TestLeakageScanner_SecretInTrackedFileDiff_NowFiltered(t *testing.T) {
@@ -680,7 +680,7 @@ func TestLeakageScanner_SecretInTrackedFileDiff_NowFiltered(t *testing.T) {
 	report := &scanReport{}
 	scanBytesForSecrets(report, patchPath, patch)
 	if len(report.hits) > 0 {
-		t.Fatalf("secret-shaped tracked-file diff content leaked into staged.patch.gz unredacted (%v) — checkpoint's patchredact.go fix is either missing, not wired into Capture, or regressed; see day1/checkpoint@f981bde", report.hits)
+		t.Fatalf("secret-shaped tracked-file diff content leaked into staged.patch.gz unredacted (%v) — checkpoint's patchredact.go fix is either missing, not wired into Capture, or regressed; see vertical-slice/checkpoint@f981bde", report.hits)
 	}
 	if strings.Contains(string(patch), secretValue) {
 		t.Fatalf("raw secret value %q found verbatim in staged.patch.gz even though internal/redact's detectors did not flag it — scanner and raw-substring checks disagree", secretValue)

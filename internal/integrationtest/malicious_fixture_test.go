@@ -1,4 +1,4 @@
-// malicious_fixture_test.go implements qa-06 (docs/implementation/day1/
+// malicious_fixture_test.go implements qa-06 (docs/implementation/vertical-slice/
 // EXECUTION_DAG.md's qa-06 row; agents/qa.md deliverable #6: "Path
 // traversal/symlink and malicious fixture tests").
 //

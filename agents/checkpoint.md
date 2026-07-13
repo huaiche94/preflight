@@ -40,7 +40,7 @@ testdata/repositories/**
 testdata/checkpoints/repository/**
 internal/storage/sqlite/migrations/0030-0039_*.sql
 
-docs/implementation/day1/checkpoint.md
+docs/implementation/vertical-slice/checkpoint.md
 ```
 
 ---

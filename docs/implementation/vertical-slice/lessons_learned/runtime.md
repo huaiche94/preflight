@@ -279,7 +279,7 @@
   `TurnInterrupterAdapter`/`InterruptAndSleep`) satisfies `pause.Interrupter`, an existing internal
   seam this role already owns (not a frozen port); `internal/cli/errors.go`'s new JSON-rendering
   helpers are entirely new code in an already-owned file, not a widening of any shared contract.
-- `runtime-b10` (this role's final Day-1 node) remains for a future wave — explicitly not started
+- `runtime-b10` (this role's final vertical-slice node) remains for a future wave — explicitly not started
   this wave, per the task's own instruction.
 
 # Lessons Learned — runtime (Wave 11: runtime-b10 — FINAL NODE)
@@ -296,7 +296,7 @@
   `checkpoint-b09`/`predictor-11` cross-role, `runtime-a11`/`runtime-b09`
   same-role, all Wave 10), this node closed out not just Part B but the
   ENTIRE role's remaining DAG scope — no further work of any kind remains
-  assigned to this role for Day-1.
+  assigned to this role for vertical-slice.
 - The "comprehensive audit-then-close node finds ~1 real gap per
   sub-area" pattern (first named Wave 10) held a THIRD and FOURTH time
   this wave: one real gap in Part A (`PauseStore`'s missing SQLite

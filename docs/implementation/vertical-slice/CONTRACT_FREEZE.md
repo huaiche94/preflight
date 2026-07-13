@@ -1,4 +1,4 @@
-# Preflight Day-1 Contract Freeze
+# Preflight Vertical-Slice Contract Freeze
 
 Status: **ACCEPTED** — Bootstrap stage, executed by the lead directly (see `CONSTITUTION.md` amendment pending re: Bootstrap-as-lead-only-prerequisite, approved by repository owner 2026-07-12).
 Contract commit: `4262b4b`
@@ -65,7 +65,7 @@ const (
 type Error struct { Code ErrorCode; Message string; Retryable bool; Details map[string]string }
 ```
 
-Fail-open vs fail-closed (Constitution §immutable-day-one-rule-10, from the Day-1 plan): an **operational observation** failure (e.g. a quota read times out) MAY fail open — proceed with `Confidence: ConfidenceUnavailable`, not block the user. A **state-integrity** failure (e.g. a checkpoint's SHA-256 doesn't match, or a transaction partially applied) MUST fail closed — `ErrCodeIntegrity`, `Retryable: false`, and the caller must not proceed as if it succeeded.
+Fail-open vs fail-closed (Constitution §immutable-day-one-rule-10, from the vertical-slice plan): an **operational observation** failure (e.g. a quota read times out) MAY fail open — proceed with `Confidence: ConfidenceUnavailable`, not block the user. A **state-integrity** failure (e.g. a checkpoint's SHA-256 doesn't match, or a transaction partially applied) MUST fail closed — `ErrCodeIntegrity`, `Retryable: false`, and the caller must not proceed as if it succeeded.
 
 ## Privacy contract
 
@@ -81,7 +81,7 @@ Fail-open vs fail-closed (Constitution §immutable-day-one-rule-10, from the Day
 - 0040–0049 `predictor`
 - 0050–0059 `runtime` (Part A — pause/scheduler)
 
-`runtime` Part B does not get a range; it does not add schema unless `contract-integrator` explicitly assigns one (`Preflight_Day1_Parallel_Execution_Plan.md` §7).
+`runtime` Part B does not get a range; it does not add schema unless `contract-integrator` explicitly assigns one (`Preflight_Parallel_Execution_Plan.md` §7).
 
 ## Predictor pipeline ports (ADR-041)
 

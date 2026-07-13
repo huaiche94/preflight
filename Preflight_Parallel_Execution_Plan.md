@@ -1,4 +1,4 @@
-# Preflight Day-1 Parallel Implementation Plan
+# Preflight Vertical-Slice Parallel Implementation Plan
 
 ## 1. Decision
 
@@ -145,7 +145,7 @@ If every worker must use Fable, do not give the complete 161 KB ADD to every wor
 
 ## 6. Contract-freeze gate
 
-No feature role should invent a competing domain type. `contract-integrator` must first commit `docs/implementation/day1/CONTRACT_FREEZE.md` and compileable skeletons for:
+No feature role should invent a competing domain type. `contract-integrator` must first commit `docs/implementation/vertical-slice/CONTRACT_FREEZE.md` and compileable skeletons for:
 
 - UUIDv7-style ID aliases or wrappers;
 - `Session`, `Turn`, `Task`, `ProgressNode`, `ArtifactReference`;
@@ -184,7 +184,7 @@ internal/domain/**
 internal/app/ports.go
 pkg/protocol/v1/**
 docs/adr/**
-docs/implementation/day1/CONTRACT_FREEZE.md
+docs/implementation/vertical-slice/CONTRACT_FREEZE.md
 ```
 
 ### Files owned only by `foundation`
@@ -233,13 +233,13 @@ Each feature role writes unit tests under its own package. `qa` owns only:
 Recommended branches:
 
 ```bash
-git worktree add ../preflight-contract-integrator -b day1/contract-integrator
-git worktree add ../preflight-foundation           -b day1/foundation
-git worktree add ../preflight-claude-provider      -b day1/claude-provider
-git worktree add ../preflight-checkpoint           -b day1/checkpoint
-git worktree add ../preflight-predictor            -b day1/predictor
-git worktree add ../preflight-runtime              -b day1/runtime
-git worktree add ../preflight-qa                   -b day1/qa
+git worktree add ../preflight-contract-integrator -b vertical-slice/contract-integrator
+git worktree add ../preflight-foundation           -b vertical-slice/foundation
+git worktree add ../preflight-claude-provider      -b vertical-slice/claude-provider
+git worktree add ../preflight-checkpoint           -b vertical-slice/checkpoint
+git worktree add ../preflight-predictor            -b vertical-slice/predictor
+git worktree add ../preflight-runtime              -b vertical-slice/runtime
+git worktree add ../preflight-qa                   -b vertical-slice/qa
 ```
 
 `contract-integrator` lands the contract commit first. Every other branch rebases onto that exact commit before writing production code.
@@ -249,13 +249,13 @@ git worktree add ../preflight-qa                   -b day1/qa
 Every role owns exactly one progress artifact:
 
 ```text
-docs/implementation/day1/contract-integrator.md
-docs/implementation/day1/foundation.md
-docs/implementation/day1/claude-provider.md
-docs/implementation/day1/checkpoint.md
-docs/implementation/day1/predictor.md
-docs/implementation/day1/runtime.md
-docs/implementation/day1/qa.md
+docs/implementation/vertical-slice/contract-integrator.md
+docs/implementation/vertical-slice/foundation.md
+docs/implementation/vertical-slice/claude-provider.md
+docs/implementation/vertical-slice/checkpoint.md
+docs/implementation/vertical-slice/predictor.md
+docs/implementation/vertical-slice/runtime.md
+docs/implementation/vertical-slice/qa.md
 ```
 
 After every logical node, the role must write:
@@ -390,7 +390,7 @@ two never drift out of sync.
 | qa | [`agents/qa.md`](agents/qa.md) | Cheaper model for fixtures/CI; Fable for final adversarial review | Objective evidence that the vertical slice is safe, restartable, idempotent, provider-compatible. |
 
 The contract-freeze template `contract-integrator` fills in when it produces
-`docs/implementation/day1/CONTRACT_FREEZE.md` lives at
+`docs/implementation/vertical-slice/CONTRACT_FREEZE.md` lives at
 [`agents/CONTRACT_FREEZE_TEMPLATE.md`](agents/CONTRACT_FREEZE_TEMPLATE.md).
 
 The prior numbered nine-role structure (`A00`–`A08`) is archived at

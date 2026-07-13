@@ -243,7 +243,7 @@ func TestServiceRestoreDryRun_CleanCheckpoint_DryRunSucceeds_NotApplied(t *testi
 		t.Fatalf("Restore: %v", err)
 	}
 	if result.Applied {
-		t.Fatal("expected Applied=false: real restore is out of Day-1 scope, dry-run never mutates")
+		t.Fatal("expected Applied=false: real restore is out of vertical-slice scope, dry-run never mutates")
 	}
 	if result.ID != created.ID {
 		t.Fatalf("expected result.ID=%s, got %s", created.ID, result.ID)

@@ -57,7 +57,7 @@ highest-ranked gap in that report).
 
 ## ADR-REC-02: Add duration and token-cost fields to the DAG task-table schema — or explicitly declare them permanently out of scope
 
-**Problem:** `docs/implementation/day1/EXECUTION_DAG.md` has never had a
+**Problem:** `docs/implementation/vertical-slice/EXECUTION_DAG.md` has never had a
 duration or token field, for any of its 84+ nodes, across two full waves.
 This was independently flagged as a gap by 4 of 5 lessons-learned files
 (`Wave2_Lessons.md` §1, issue #2) without those files having visibility
@@ -71,7 +71,7 @@ data exists at partial granularity, per that report).
 §8 (names this as the #3 priority for improving future-wave confidence).
 
 **Affected packages:** None (this is a documentation/process artifact,
-`docs/implementation/day1/EXECUTION_DAG.md`, not Go code) — listed here
+`docs/implementation/vertical-slice/EXECUTION_DAG.md`, not Go code) — listed here
 because the repository owner's Phase 2 instructions explicitly froze the
 DAG file itself as requiring ADR approval to change, so even a
 documentation-only change to its schema falls under this process.
@@ -97,9 +97,9 @@ valid answer, but don't leave a gap uninvestigated" ethos.
 **Problem:** `Preflight_ADD.md` Appendix E.3 specifies Claude Code hook
 subcommands in PascalCase (`preflight hook claude UserPromptSubmit`,
 matching Claude's own hook-event-name casing). `agents/runtime.md`'s P0
-command list, `docs/implementation/day1/EXECUTION_DAG.md`'s
+command list, `docs/implementation/vertical-slice/EXECUTION_DAG.md`'s
 `claude-provider-06` validation command, and
-`Preflight_Day1_Parallel_Execution_Plan.md`'s demo script all
+`Preflight_Parallel_Execution_Plan.md`'s demo script all
 independently use kebab-case (`preflight hook claude user-prompt-submit`).
 This was discovered by `claude-provider-06` and independently confirmed
 by the lead reading the ADD text directly during Wave 2 review — it is

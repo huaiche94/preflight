@@ -20,7 +20,7 @@ internal/evaluation/**
 testdata/models/**
 internal/storage/sqlite/migrations/0040-0049_*.sql
 schemas/model.schema.json
-docs/implementation/day1/predictor.md
+docs/implementation/vertical-slice/predictor.md
 ```
 
 If `internal/evaluation` is absent from the frozen layout, use the exact path assigned by the contract-integrator; do not create a competing package.

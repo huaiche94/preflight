@@ -1,4 +1,4 @@
-# Preflight Day-1 Contract Freeze
+# Preflight Vertical-Slice Contract Freeze
 
 Status: DRAFT — contract-integrator must replace every placeholder before other roles' branches rebase.
 Contract commit: `<sha>`

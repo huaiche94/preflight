@@ -21,7 +21,7 @@ Refer to `Preflight_ADD.md` for architecture.
 | `predictor.md` | Scope estimator, predictor, risk, policy, authorization | (was `05-predictor-policy.md`) |
 | `runtime.md` | Graceful Pause + durable scheduler, **and** CLI/API/orchestration | (was `06-graceful-pause-scheduler.md` + `07-runtime-cli-api.md`) |
 | `qa.md` | Cross-component QA, security, reliability, CI | (was `08-qa-security-ci.md`) |
-| `CONTRACT_FREEZE_TEMPLATE.md` | Scaffold for the contract-integrator's `docs/implementation/day1/CONTRACT_FREEZE.md` deliverable | (unchanged) |
+| `CONTRACT_FREEZE_TEMPLATE.md` | Scaffold for the contract-integrator's `docs/implementation/vertical-slice/CONTRACT_FREEZE.md` deliverable | (unchanged) |
 
 Two roles (`checkpoint`, `runtime`) each cover what were previously two
 separate packets. They stay one role because their two halves are always
@@ -34,12 +34,12 @@ real seam, not a merge into one undifferentiated blob.
 
 A packet file is meant to be handed, on its own, to an isolated
 agent/worktree — it does not require the full `Preflight_ADD.md` or
-`Preflight_Day1_Parallel_Execution_Plan.md` in context. To start a role:
+`Preflight_Parallel_Execution_Plan.md` in context. To start a role:
 give it this file's contents, its assigned `Preflight_ADD.md` chapters, and
-`docs/implementation/day1/CONTRACT_FREEZE.md` once the contract-integrator
+`docs/implementation/vertical-slice/CONTRACT_FREEZE.md` once the contract-integrator
 has produced it.
 
 For overall context (vision, scope boundary, topology, merge order, cut
-list), see `Preflight_Day1_Parallel_Execution_Plan.md` at the repository
+list), see `Preflight_Parallel_Execution_Plan.md` at the repository
 root. For architecture, see `Preflight_ADD.md`. For project-wide governance
 and precedence rules, see the Preflight Repository Constitution.

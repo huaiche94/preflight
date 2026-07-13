@@ -1,4 +1,4 @@
-// duplicate_outoforder_test.go implements qa-04 (docs/implementation/day1/
+// duplicate_outoforder_test.go implements qa-04 (docs/implementation/vertical-slice/
 // EXECUTION_DAG.md's qa-04 row; agents/qa.md deliverable #4:
 // "Duplicate/out-of-order event test").
 //
@@ -23,7 +23,7 @@
 // first requires a real, production code path connecting a persisted
 // claude-provider pkg/protocol/v1.Event to a progress.CompleteNode.Run
 // call. A thorough repo-wide search (documented in full in this node's
-// docs/implementation/day1/qa.md entry and in the qa-04 final report)
+// docs/implementation/vertical-slice/qa.md entry and in the qa-04 final report)
 // established that NO such path exists in production code today:
 //
 //   - internal/orchestrator/hooks.go's HandleStop/HandleUserPromptSubmit/

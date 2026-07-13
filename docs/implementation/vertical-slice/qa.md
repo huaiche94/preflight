@@ -24,7 +24,7 @@
   docs link/fence checks, and migration tests. None of those trees exist
   yet in this wave (no `vscode/`, no JSON Schema artifacts, no
   `internal/storage/sqlite/migrations/*.sql` — `foundation-06` is still
-  pending per `docs/implementation/day1/foundation.md`). Scaffolding CI
+  pending per `docs/implementation/vertical-slice/foundation.md`). Scaffolding CI
   jobs against paths that don't exist would violate Constitution §7 rule
   10 (no abstractions a later milestone needs but this one doesn't) —
   flagged here so whichever future qa/CI node adds those trees also
@@ -140,7 +140,7 @@ findings:
     file: "internal/orchestrator/hooks.go (HandleStop/HandleUserPromptSubmit/HandleStopFailure/HandleStatusLine normalize+persist and stop there — HandleStop's own doc comment: 'Full Progress Tree/Git/artifact reconciliation... is outcome labeling depth beyond this node's scope'); internal/telemetry/claude/normalizer.go (no producer ever assigns Event.TaskID or Event.ProgressNodeID — every event's envelope() helper sets only SessionID); internal/progress/complete_node.go's CompleteNodeInput and internal/app/ports.go's CompleteNodeRequest (both frozen to exactly {NodeID, IdempotencyKey, Artifacts[, RepositoryCheckpointID]} — no v1.Event/EventID/EventType field anywhere); internal/progress/node_store.go's Node.ProviderNodeID field (stored and read back, confirmed via grep, but no code anywhere looks a node up BY ProviderNodeID); internal/app/wiring/wiring.go (wires no bridge between internal/telemetry/claude and internal/progress; Services.ProgressTree is still just the bare frozen interface, unimplemented, per that package's own doc comment)."
     reproduction: "go test ./internal/integrationtest/... -run TestDuplicateOutOfOrder_KnownGap_NoProviderEventToCompleteNodeAdapterExists -v — parses+normalizes a real Stop fixture and asserts ev.TaskID==\"\" and ev.ProgressNodeID==\"\" (both true today); combined with a repo-wide grep (documented in this file's own package doc comment) for any file importing both internal/telemetry/claude and internal/progress (zero matches) or pkg/protocol/v1 and internal/progress (zero matches), and for any adapter/bridge/consumer/dispatcher file (none exist)."
     expected_invariant: "Preflight_ADD.md's Progress Tree is meant to be driven forward by real provider observations (a provider.turn.completed signal is exactly the kind of real-world event that should be able to trigger a node's completion) — Constitution §6.1 ('Progress Tree is the canonical durable task state... never an agent's own claim of done') implies SOME real signal must be able to drive a real completion, not just a test harness hand-constructing a CompleteNodeInput. Today, nothing does: the event pipeline (claude-provider) and the completion pipeline (checkpoint/progress) are both individually correct and individually well-tested, but there is a genuine missing middle layer between them. This is exactly the kind of integration-only gap qa-04 was chartered to find, per its own task brief ('an event type or field mapping mismatch, a case where claude-provider's real events don't actually carry information checkpoint's ordering-check logic expects')."
-    owning_role: "contract-integrator (a new cross-component port/field is needed on the frozen v1.Event/CompleteNodeRequest contract, or a documented decision that TaskID/ProgressNodeID resolution happens via a different, not-yet-built lookup path — Constitution §4.2 reserves pkg/protocol/v1/** and internal/app/ports.go exclusively to this role) in coordination with claude-provider (would need to populate TaskID/ProgressNodeID on produced events once a resolution mechanism exists) and checkpoint (whichever role builds the actual consumer/adapter). Not routed as P0: every individual component this gap spans is itself correct and passes its own tests, no existing invariant is violated, and Day-1's frozen DAG never assigned any node the explicit job of building this adapter this wave — it is a forward-looking integration gap this node exists to surface, not a regression."
+    owning_role: "contract-integrator (a new cross-component port/field is needed on the frozen v1.Event/CompleteNodeRequest contract, or a documented decision that TaskID/ProgressNodeID resolution happens via a different, not-yet-built lookup path — Constitution §4.2 reserves pkg/protocol/v1/** and internal/app/ports.go exclusively to this role) in coordination with claude-provider (would need to populate TaskID/ProgressNodeID on produced events once a resolution mechanism exists) and checkpoint (whichever role builds the actual consumer/adapter). Not routed as P0: every individual component this gap spans is itself correct and passes its own tests, no existing invariant is violated, and vertical-slice's frozen DAG never assigned any node the explicit job of building this adapter this wave — it is a forward-looking integration gap this node exists to surface, not a regression."
   - severity: P2
     title: "checkpoint-a07's duplicate/out-of-order semantics hold correctly when driven by REAL claude-provider events end-to-end, not just hand-built CompleteNodeInput values — no defect found in either component's own logic"
     file: "internal/telemetry/claude/store.go (claude-provider-05); internal/progress/idempotency.go, internal/progress/complete_node.go (checkpoint-a07)"
@@ -297,7 +297,7 @@ assumptions:
   - "golangci-lint is installed in the lint job via
     `golangci/golangci-lint-action@v6` rather than `go install
     .../golangci-lint/v2/cmd/golangci-lint@latest` (the method
-    foundation-09 used locally per docs/implementation/day1/foundation.md).
+    foundation-09 used locally per docs/implementation/vertical-slice/foundation.md).
     The action is the documented, cached, GitHub-native way to run
     golangci-lint in Actions and natively understands the v2 config
     schema `.golangci.yml` already uses; `go install` would work too but
@@ -390,7 +390,7 @@ assumptions:
   - "License stated as Apache-2.0 in CONTRIBUTING.md/GOVERNANCE.md,
     matching README.md's Tech stack table ('License: Apache-2.0') - no
     LICENSE file exists in the repository root yet
-    (docs/implementation/day1/foundation.md's foundation-09 log flags
+    (docs/implementation/vertical-slice/foundation.md's foundation-09 log flags
     this as a known, not-yet-assigned gap: 'No LICENSE or NOTICE file was
     added even though both are named in foundation's exclusive-paths
     list'). LICENSE/NOTICE are foundation-owned paths per agents/qa.md's
@@ -461,19 +461,19 @@ validation:
   - "go test ./internal/integrationtest/... -v   # 9/10 PASS, 1 EXPECTED FAIL (see below)"
   - "golangci-lint run ./internal/integrationtest/...   # 0 issues"
 commit: <recorded below>
-next_action: none — this is a corrective task, not a new DAG node; STOP once committed. Re-validation of the updated test to an actual PASS happens once the lead merges day1/checkpoint into day1/qa; not this node's job to force that merge.
+next_action: none — this is a corrective task, not a new DAG node; STOP once committed. Re-validation of the updated test to an actual PASS happens once the lead merges vertical-slice/checkpoint into vertical-slice/qa; not this node's job to force that merge.
 assumptions:
   - "checkpoint independently fixed this wave's qa-05 P1 finding
     ('Secret-shaped content in a TRACKED file's staged/unstaged diff is
-    never filtered by internal/redact') via day1/checkpoint commit
+    never filtered by internal/redact') via vertical-slice/checkpoint commit
     f981bde ('checkpoint: extend secret scanning to tracked-file diff
     content (fixes qa-05 P1 finding)'), adding
     internal/repocheckpoint/patchredact.go and wiring it into Capture
     (capture.go) right after the staged/unstaged DiffPatch calls, before
     archiving. Verified this independently by reading both files via
-    `git show day1/checkpoint:internal/repocheckpoint/patchredact.go` and
-    `git show day1/checkpoint:internal/repocheckpoint/capture.go`
-    read-only (day1/checkpoint was never merged or checked out into this
+    `git show vertical-slice/checkpoint:internal/repocheckpoint/patchredact.go` and
+    `git show vertical-slice/checkpoint:internal/repocheckpoint/capture.go`
+    read-only (vertical-slice/checkpoint was never merged or checked out into this
     worktree; internal/repocheckpoint/** remains checkpoint's exclusive
     path, untouched here) — did not just trust the lead's claim."
   - "patchredact.go's redactPatchSecrets scans only '+'/'-'-prefixed line
@@ -504,10 +504,10 @@ assumptions:
     confirming redaction did not corrupt the patch's applicability — a
     sanity check only, not a re-test of checkpoint-b08's own
     restore-dry-run logic, which remains out of this node's scope."
-  - "This test CANNOT pass on day1/qa alone right now, and that is
+  - "This test CANNOT pass on vertical-slice/qa alone right now, and that is
     expected, not a regression: internal/repocheckpoint/patchredact.go
     does not exist on this branch until the lead integrates
-    day1/checkpoint into day1/qa (or both into main). Ran the full
+    vertical-slice/checkpoint into vertical-slice/qa (or both into main). Ran the full
     updated test locally to confirm: it fails with exactly 'secret-shaped
     content leaked into staged.patch.gz unredacted' (the github_token
     detector still fires, since this branch's Capture has no redaction
@@ -516,23 +516,23 @@ assumptions:
     checkpoint's fix is actually present. All 9 other tests in
     internal/integrationtest (the 5 qa-04 duplicate/out-of-order tests
     plus the other 4 qa-05 leakage-scanner tests) pass unaffected."
-  - "Did not touch internal/repocheckpoint/** or merge day1/checkpoint
-    into day1/qa, per this task's explicit constraint — checkpoint's
+  - "Did not touch internal/repocheckpoint/** or merge vertical-slice/checkpoint
+    into vertical-slice/qa, per this task's explicit constraint — checkpoint's
     branch was inspected read-only via `git show
-    day1/checkpoint:<path>` only."
+    vertical-slice/checkpoint:<path>` only."
 blockers: []
 findings:
   - severity: informational
-    title: "qa-05 P1 finding ('secret-shaped content in a TRACKED file's staged/unstaged diff is never filtered') is now fixed upstream by checkpoint (day1/checkpoint@f981bde, internal/repocheckpoint/patchredact.go) — this node's test updated to assert the corrected behavior; re-validated for real once the lead's integration merges day1/checkpoint and day1/qa together."
+    title: "qa-05 P1 finding ('secret-shaped content in a TRACKED file's staged/unstaged diff is never filtered') is now fixed upstream by checkpoint (vertical-slice/checkpoint@f981bde, internal/repocheckpoint/patchredact.go) — this node's test updated to assert the corrected behavior; re-validated for real once the lead's integration merges vertical-slice/checkpoint and vertical-slice/qa together."
     file: "internal/integrationtest/leakage_scanner_test.go (this node); internal/repocheckpoint/patchredact.go, internal/repocheckpoint/capture.go (checkpoint, read-only reference only)"
-    reproduction: "go test ./internal/integrationtest/... -run TestLeakageScanner_SecretInTrackedFileDiff_NowFiltered -v — on day1/qa alone (checkpoint's fix absent) this currently fails as expected with 'secret-shaped content leaked into staged.patch.gz unredacted'; once day1/checkpoint@f981bde is integrated, the same command is expected to PASS, asserting no raw secret survives in staged.patch.gz, checkpoint's exact redaction placeholder string is present instead, and the redacted patch remains git-apply-able."
+    reproduction: "go test ./internal/integrationtest/... -run TestLeakageScanner_SecretInTrackedFileDiff_NowFiltered -v — on vertical-slice/qa alone (checkpoint's fix absent) this currently fails as expected with 'secret-shaped content leaked into staged.patch.gz unredacted'; once vertical-slice/checkpoint@f981bde is integrated, the same command is expected to PASS, asserting no raw secret survives in staged.patch.gz, checkpoint's exact redaction placeholder string is present instead, and the redacted patch remains git-apply-able."
     expected_invariant: "Once integrated, no secret-shaped content staged/unstaged into a tracked file survives unredacted into a Repository Checkpoint's patch artifacts, and the redacted patch remains structurally valid (git-apply-able) — closing this wave's qa-05 P1 finding."
     owning_role: "qa (this node) for the test; checkpoint (already delivered, per f981bde) for the fix; lead for final integration and re-validation."
 ```
 
 ## Wave (Stage 4 completion) — qa-02, qa-03, qa-06, qa-07, qa-09
 
-This wave assigned qa its ENTIRE remaining DAG scope: qa-02 (the Day-1
+This wave assigned qa its ENTIRE remaining DAG scope: qa-02 (the vertical-slice
 demo), qa-03 (restart-same-DB, multi-role), qa-06 (independent malicious
 fixtures), qa-07 (scheduler double-worker race, integration scope), and
 qa-09 (this final report). Merged `origin/main` first (fast-forward,
@@ -620,11 +620,11 @@ assumptions:
 blockers: []
 findings:
   - severity: informational
-    title: "The Day-1 demo composes cleanly end to end across every real
+    title: "The vertical-slice demo composes cleanly end to end across every real
       role's work — no defect found in this pass."
     file: "internal/integrationtest/e2e_highrisk_test.go"
     reproduction: "N/A — not a defect. go test ./internal/integrationtest/... -run E2EHighRisk -v is the closure evidence."
-    expected_invariant: "The literal Day-1 demo scenario (status-line -> preflight block -> checkpoint -> one-time allow -> Stop -> pause/wake recovery) works end-to-end against real implementations throughout."
+    expected_invariant: "The literal vertical-slice demo scenario (status-line -> preflight block -> checkpoint -> one-time allow -> Stop -> pause/wake recovery) works end-to-end against real implementations throughout."
     owning_role: "qa (this node) — informational; no action needed from another role."
 ```
 
@@ -714,7 +714,7 @@ validation:
 commit: 4d81590
 next_action: qa-07 (this wave's next assigned node)
 assumptions:
-  - "Read checkpoint-b09's own final report in docs/implementation/day1/checkpoint.md
+  - "Read checkpoint-b09's own final report in docs/implementation/vertical-slice/checkpoint.md
     in full before writing anything, to identify EXACTLY what that node's
     own adversarial audit already covered (its own genuine finding: Verify
     joined manifest.Artifacts[].Path directly onto ArtifactRoot with no
@@ -855,7 +855,7 @@ findings:
 
 This is qa's final assigned DAG node. Per `agents/qa.md`'s "Final report"
 section and this wave's own task instructions, this report is
-comprehensive across the ENTIRE qa role's Day-1 scope — qa-01 through
+comprehensive across the ENTIRE qa role's vertical-slice scope — qa-01 through
 qa-09 — not just this wave's four nodes. `go test ./... -race` was
 re-run as this node's own required validation (see "Full-repo test
 health" below); `golangci-lint run ./...` (whole repo) was re-run and is
@@ -924,11 +924,11 @@ requirement.
 
 **P0 — blocks merge: none.**
 
-No P0 finding exists anywhere in qa's Day-1 scope as of this report. No
+No P0 finding exists anywhere in qa's vertical-slice scope as of this report. No
 invariant this role is chartered to verify (idempotency, restart safety,
 path-traversal/symlink safety, secret/raw-prompt leakage, race safety,
 governance-doc presence, CI green) is currently violated by a real,
-reproducible defect that would make merging the current `day1/qa` branch
+reproducible defect that would make merging the current `vertical-slice/qa` branch
 unsafe.
 
 **P1 — must fix before demo:**
@@ -958,7 +958,7 @@ unsafe.
      — still passes, i.e. the gap is still real (a real normalized Stop
      event's `TaskID`/`ProgressNodeID` are still empty strings). Also
      reconfirmed this wave via qa-02's own end-to-end scenario: driving
-     the literal Day-1 demo required this test's own file to complete a
+     the literal vertical-slice demo required this test's own file to complete a
      Progress Tree node via `internal/progress.CompleteNode` directly,
      using a hand-built `CompleteNodeInput` rather than any real event-
      driven trigger — the exact same gap, now also visibly load-bearing
@@ -985,10 +985,10 @@ unsafe.
    - Why P1, not P0: every individual component this gap spans (claude-
      provider's normalizer, checkpoint's CompleteNode, runtime's hook
      handlers) is itself correct and passes its own tests; no existing
-     invariant is violated; Day-1's frozen DAG never assigned any node the
+     invariant is violated; vertical-slice's frozen DAG never assigned any node the
      explicit job of building this adapter this wave. It is a real,
      forward-looking integration gap, not a regression — but it is
-     squarely in the path of "the literal Day-1 demo" (qa-02) actually
+     squarely in the path of "the literal vertical-slice demo" (qa-02) actually
      working end-to-end in a REAL deployed system (as opposed to this
      test suite's own test-only glue standing in for it), so it should be
      resolved before any live demo, not merely tracked as a someday
@@ -1044,7 +1044,7 @@ unsafe.
 | Node | Deliverable | Outcome |
 |---|---|---|
 | qa-01 | Cross-platform CI | Completed; documented, deliberate Windows-race-detector platform split; no defect |
-| qa-02 | E2E high-risk Claude fixture flow (Day-1 demo) | Completed; one coherent real end-to-end scenario passes; surfaces the qa-04 P1 gap as load-bearing (see above) |
+| qa-02 | E2E high-risk Claude fixture flow (vertical-slice demo) | Completed; one coherent real end-to-end scenario passes; surfaces the qa-04 P1 gap as load-bearing (see above) |
 | qa-03 | Restart same-DB test | Completed; multi-role state (5 roles' storage) survives a real restart in one shared file; no defect |
 | qa-04 | Duplicate/out-of-order event test | Completed; found and routed the **P1** finding above (still open) |
 | qa-05 | Raw-prompt/secret leakage scanner | Completed; found a **P1** (secret-shaped content in tracked-file diffs unfiltered), **routed and FIXED** by checkpoint (`f981bde`), re-verified passing this wave |
@@ -1055,8 +1055,8 @@ unsafe.
 
 ### Closing statement
 
-This completes the qa role's **entire Day-1 DAG scope** —
-`docs/implementation/day1/EXECUTION_DAG.md`'s qa-01 through qa-09, all
+This completes the qa role's **entire vertical-slice DAG scope** —
+`docs/implementation/vertical-slice/EXECUTION_DAG.md`'s qa-01 through qa-09, all
 nine nodes, are now `status: completed`. No further qa-owned DAG node
 remains. The one open **P1** (the missing provider-event-to-node-
 completion adapter) and one open **P2** (LICENSE/NOTICE) above are both

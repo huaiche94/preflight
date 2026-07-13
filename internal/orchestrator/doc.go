@@ -49,7 +49,7 @@
 // merge time"). Evaluate is wired against whatever app.EvaluationService
 // the caller injects via wiring.App — this wave, that is
 // internal/testutil/fakes.FakeEvaluationService (see
-// docs/implementation/day1/runtime.md's Wave 5 section for the exact call
+// docs/implementation/vertical-slice/runtime.md's Wave 5 section for the exact call
 // site). No code in this package hardcodes a fake; swapping to the real
 // predictor.EvaluationService, once it lands, is a wiring-layer change
 // only (internal/app/wiring), not an orchestrator change — this package

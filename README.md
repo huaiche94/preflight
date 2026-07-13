@@ -9,16 +9,16 @@ gracefully pause, or block that turn.
 It answers a different question than checkpoint/resume/memory tools do:
 not "how do we continue?" but **"should we even start this turn?"**
 
-> **Project status: Day-1 vertical slice feature-complete (Wave 12 of 12, integrated).**
+> **Project status: vertical slice feature-complete (Wave 12 of 12, integrated).**
 > Bootstrap (Stage-0 contract freeze) and Waves 1-12 are integrated on
 > `main`. **Every feature role — `foundation`, `claude-provider`,
 > `checkpoint`, `predictor`, `runtime`, and `qa` — has completed its
-> entire Day-1 DAG scope.** qa's final severity report found no P0s;
+> entire vertical-slice DAG scope.** qa's final severity report found no P0s;
 > one P1 remains open (no production adapter yet connects a persisted
 > provider event to Progress Tree node completion). Only the Final
 > integration gate (`contract-integrator-final`, Stage 5) remains. See
-> the [Day-1 wave roadmap](#day-1-wave-roadmap) below and
-> `docs/implementation/day1/EXECUTION_DAG.md` for task-level status.
+> the [Wave roadmap](#wave-roadmap) below and
+> `docs/implementation/vertical-slice/EXECUTION_DAG.md` for task-level status.
 > Milestone gating per `Preflight_ADD.md` §31 still applies.
 
 ## Source of truth
@@ -28,11 +28,11 @@ not "how do we continue?" but **"should we even start this turn?"**
 | [`CONSTITUTION.md`](CONSTITUTION.md) | **Supreme process authority.** Single-source-of-truth hierarchy, document precedence, ADR rules, path ownership, provider-addition criteria, Progress Tree invariants, and the rules every agent must follow. Read this first. |
 | [`Preflight_ADD.md`](Preflight_ADD.md) | **The single authoritative architecture and implementation specification.** When code, issues, PRs, or comments conflict with it, this document (and accepted ADRs under `docs/adr/`) wins for architecture. |
 | [`AGENTS.md`](AGENTS.md) | Contributor/agent quick-reference — required reading before any implementation work. |
-| [`Preflight_Day1_Parallel_Execution_Plan.md`](Preflight_Day1_Parallel_Execution_Plan.md) | Subordinate execution plan for the first vertical-slice build: seven-role topology, ownership boundaries, merge order. |
+| [`Preflight_Parallel_Execution_Plan.md`](Preflight_Parallel_Execution_Plan.md) | Subordinate execution plan for the first vertical-slice build: seven-role topology, ownership boundaries, merge order. |
 | [`agents/`](agents/) | One canonical role definition per bounded context, linked from the plan above. |
 | [`docs/adr/`](docs/adr/) | Accepted Architecture Decision Records — full-detail companions to the short entries in `Preflight_ADD.md` §33. |
 | [`Preflight_Predictor_Design_Supplement.md`](Preflight_Predictor_Design_Supplement.md) | Predictor pipeline design detail (Scope/Token/Quota Forecast, Risk Estimation) — companion to `Preflight_ADD.md` §14-17, formalized by ADR-041. |
-| [`docs/implementation/day1/`](docs/implementation/day1/) | Live Day-1 execution status: `EXECUTION_DAG.md` (task-level DAG, amended by ADR-041), `CONTRACT_FREEZE.md`, per-role progress artifacts, lessons learned, and post-wave analyses. |
+| [`docs/implementation/vertical-slice/`](docs/implementation/vertical-slice/) | Live vertical-slice execution status: `EXECUTION_DAG.md` (task-level DAG, amended by ADR-041), `CONTRACT_FREEZE.md`, per-role progress artifacts, lessons learned, and post-wave analyses. |
 | [`docs/repository_inventory.md`](docs/repository_inventory.md) | Audit of every markdown file in the repo and its authority/status. |
 | [`docs/archive/`](docs/archive/) | Superseded documents, kept for historical reference, not for implementation. |
 
@@ -52,15 +52,15 @@ document, prior draft, or conversation as authoritative over either.
 
 See `Preflight_ADD.md` §1 for the full executive decision record.
 
-## Day-1 wave roadmap
+## Wave roadmap
 
-The Day-1 vertical slice is 84 tasks + 1 final integration across 7 roles
-(see `docs/implementation/day1/EXECUTION_DAG.md`, as amended by ADR-041).
+The vertical slice is 84 tasks + 1 final integration across 7 roles
+(see `docs/implementation/vertical-slice/EXECUTION_DAG.md`, as amended by ADR-041).
 Stages and task dependencies are canonical in that DAG; **waves** are the
 integration rounds the work actually ships in. Waves 1–2 below are as
 executed. Wave 3 onward is a provisional, dependency-derived grouping —
 each wave is re-planned by the lead before it starts (see
-`docs/implementation/day1/wave2-analysis/` for the inputs to Wave 3
+`docs/implementation/vertical-slice/wave2-analysis/` for the inputs to Wave 3
 planning) and must respect the DAG's stage and dependency order.
 
 | Wave | Scope (task IDs) | Status |
@@ -77,12 +77,12 @@ planning) and must respect the DAG's stage and dependency order.
 | Wave 9 | checkpoint-a09/b09 · predictor-11 · runtime-a09/a10/b06 | ✅ Integrated (`192e4b9`) — completes **checkpoint** (a01-a09/b01-b09) and **predictor** (01-11) entirely; found and fixed a real path-traversal vulnerability (checkpoint) and a real TOCTOU race (runtime) |
 | Wave 10 | runtime-a11 · runtime-b09 | ✅ Integrated (`a249ca2`) — closed two genuine gaps: a missing TurnInterrupter-to-PauseRecord wiring path, and no CLI command ever serialized its typed error to JSON (Cobra's default printer flattened it to plain text) |
 | Wave 11 | runtime-b10 | ✅ Integrated (`2fbc0c8`) — completes **runtime** entirely (a01-a11/b01-b10, 21 nodes across 9 waves); proved in-process restart on the same SQLite file, including a real OS-process SIGKILL crash test |
-| Wave 12 | qa-02/03/06/07/09 | ✅ Integrated (`a91c239`) — completes **qa** entirely; the literal Day-1 E2E demo runs real code end-to-end. Final report: no P0s, one open P1 (provider-event-to-node-completion wiring), fully documented |
+| Wave 12 | qa-02/03/06/07/09 | ✅ Integrated (`a91c239`) — completes **qa** entirely; the literal vertical-slice E2E demo runs real code end-to-end. Final report: no P0s, one open P1 (provider-event-to-node-completion wiring), fully documented |
 | Final | contract-integrator-final (Stage 5) | 🔄 In progress — `go test ./... -race` + cross-role contradiction review; last gate |
 
 Wave 5 onward is intentionally not fixed in detail — each wave is
 re-derived from the DAG's actual dependency edges once the prior wave
-integrates (see `docs/implementation/day1/wave2-analysis/Wave3_Recommendation.md`
+integrates (see `docs/implementation/vertical-slice/wave2-analysis/Wave3_Recommendation.md`
 for the method), not planned far in advance against a DAG that keeps
 changing shape as work lands.
 
@@ -105,9 +105,9 @@ pkg/protocol/v1/      public wire protocol
 vscode/                VS Code extension (not yet created)
 research/              Python offline research (not yet created)
 docs/adr/               accepted architecture decision records
-docs/implementation/    Day-1 execution DAG, progress artifacts, wave analyses
+docs/implementation/    execution DAG, progress artifacts, wave analyses
 docs/archive/           superseded documents
-agents/                 Day-1 role definitions (one file per bounded context)
+agents/                 vertical-slice role definitions (one file per bounded context)
 ```
 
 ## Contributing

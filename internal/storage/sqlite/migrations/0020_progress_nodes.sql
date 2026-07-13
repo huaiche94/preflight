@@ -47,7 +47,7 @@ CREATE TABLE progress_nodes (
 
 -- ADD §12.3 required index. Index creation stays with the role whose
 -- migration range owns the indexed table (per foundation-06's documented
--- convention in docs/implementation/day1/foundation.md), so this lands
+-- convention in docs/implementation/vertical-slice/foundation.md), so this lands
 -- here rather than in foundation's 0001-0009 range.
 CREATE INDEX idx_progress_nodes_task_status
     ON progress_nodes(task_id, status, ordinal);

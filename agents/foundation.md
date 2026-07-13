@@ -60,7 +60,7 @@ Do not edit contract-integrator's files or another role's migration range.
 
 ## Handoff
 
-Document the DB constructor, transaction API, migration naming convention, and dependency requests in `docs/implementation/day1/foundation.md`.
+Document the DB constructor, transaction API, migration naming convention, and dependency requests in `docs/implementation/vertical-slice/foundation.md`.
 
 ## Out of scope
 

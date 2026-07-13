@@ -1,4 +1,4 @@
-// restart_sameDB_test.go implements qa-03 (docs/implementation/day1/
+// restart_sameDB_test.go implements qa-03 (docs/implementation/vertical-slice/
 // EXECUTION_DAG.md's qa-03 row; agents/qa.md deliverable #3: "Restart test
 // using the same SQLite DB").
 //

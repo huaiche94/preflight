@@ -26,7 +26,7 @@ Preflight is currently in the **Initial** governance stage
   `contract-integrator` role/architecture lead accepts one.
 
 This reflects where the project actually is today (early, single-lead,
-pre-1.0, Day-1 vertical slice under construction — see `README.md`'s
+pre-1.0, vertical slice under construction — see `README.md`'s
 wave roadmap), not an aspiration.
 
 ## Mature stage (future)
@@ -89,9 +89,9 @@ it, not a substitute for it:
 - state artifact content;
 - remote checkpoint behavior.
 
-## Path ownership during Day-1 construction
+## Path ownership during vertical-slice construction
 
-While the Day-1 vertical slice is under construction by multiple
+While the vertical slice is under construction by multiple
 parallel agent roles, `CONSTITUTION.md` §4 governs who may modify what:
 every role owns a disjoint set of paths declared in its `agents/*.md`
 file; shared/cross-cutting files are owned exclusively by
