@@ -6,6 +6,14 @@ follow [SemVer](https://semver.org/) once releases begin.
 
 ## [Unreleased]
 
+### Changed
+
+- **Renamed the product Preflight → Auspex** (ADR-045, supersedes
+  ADR-001): Go module `github.com/huaiche94/auspex`, binary `auspex`,
+  schema-version prefixes `auspex.*.v1`, user-data directory `auspex/`.
+  Pre-release rename with no migration; old local `preflight/` data
+  directories are abandoned in place. GitHub redirects the old repo URL.
+
 ### Added
 
 - Complete vertical slice (85/85 DAG nodes, Bootstrap through the Stage-5
