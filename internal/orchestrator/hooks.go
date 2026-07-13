@@ -94,19 +94,50 @@ type ForecastCardSource interface {
 // UserPromptSubmit's additionalContext and the statusline's --emit-line
 // output; nil (and any card-read error) degrades to exactly the
 // pre-issue-#14 responses — the card is presentation on top of the hook
-// contract, never a new failure mode for it.
+// contract, never a new failure mode for it. Bootstrapper, when non-nil,
+// lazily registers the session's repositories/worktrees/provider_sessions
+// chain from each hook payload's reported directory before events are
+// persisted or an evaluation runs (issue #17, sessionbootstrap.go) — the
+// missing write path that previously left SQLDataSource.Resolve
+// permanently not_found in real native-hook sessions; nil skips
+// registration entirely, exactly the pre-issue-#17 behavior.
 type HookDeps struct {
-	Clock      domain.Clock
-	IDs        domain.IDGenerator
-	Persister  EventPersister
-	TxRunner   app.TxRunner
-	Evaluation app.EvaluationService
-	Correlator *EventCorrelator
-	Forecast   ForecastCardSource
+	Clock        domain.Clock
+	IDs          domain.IDGenerator
+	Persister    EventPersister
+	TxRunner     app.TxRunner
+	Evaluation   app.EvaluationService
+	Correlator   *EventCorrelator
+	Forecast     ForecastCardSource
+	Bootstrapper *SessionBootstrapper
 }
 
 func (d HookDeps) normalizer() *claudetelemetry.Normalizer {
 	return claudetelemetry.NewNormalizer(d.Clock, d.IDs)
+}
+
+// bootstrapSession runs the issue-#17 lazy session bootstrap
+// (sessionbootstrap.go) for one hook invocation, before the caller
+// persists events or evaluates — so SQLDataSource.Resolve (the evaluation
+// pipeline's first step, and the correlator's session -> task lookup)
+// can succeed from the session's very first hook onward. dir is the hook
+// payload's own reported directory (cwd / statusline workspace), pointer-
+// typed because every payload field that can be absent stays a pointer
+// end to end (Constitution "unknown is not zero"): nil/empty means the
+// payload carried no directory, and no row is fabricated. Bootstrap is
+// nil-receiver-safe and returns only a bool, so this helper — like
+// persist and Correlate above — can never turn a hook invocation into a
+// failure (ADD §17.5 fail-open).
+func (d HookDeps) bootstrapSession(ctx context.Context, sessionID domain.SessionID, dir *string, model *string) {
+	if dir == nil || *dir == "" {
+		return
+	}
+	d.Bootstrapper.Bootstrap(ctx, SessionBootstrap{
+		SessionID: sessionID,
+		Dir:       *dir,
+		Provider:  claudetelemetry.Provider,
+		Model:     model,
+	})
 }
 
 // persist runs evs through d.Persister inside d.TxRunner if both are
@@ -182,6 +213,12 @@ func statusLineIngest(ctx context.Context, deps HookDeps, stdin []byte) (claudep
 	if err != nil {
 		return claudeprovider.StatusLineSnapshot{}, StatusLineResult{}, false
 	}
+
+	// Issue #17: register the session before persisting, from the
+	// snapshot's workspace directory. The statusline is the one hook
+	// payload that carries a model identity, so this is also where
+	// provider_sessions.model gets populated (issue #17 deliverable 3).
+	deps.bootstrapSession(ctx, snap.SessionID, statusLineWorkspaceDir(snap), statusLineModel(snap))
 
 	observedAt := deps.Clock.Now()
 	events := deps.normalizer().NormalizeStatusLine(snap, observedAt)
@@ -361,6 +398,19 @@ type promptEvaluation struct {
 // TurnID existed only on the prediction row, leaving persisted
 // evaluations unreachable from their session.
 func evaluateSubmittedPrompt(ctx context.Context, deps HookDeps, parsed claudehooks.UserPromptSubmitEvent) (promptEvaluation, error) {
+	// Issue #17: lazily register this session's repositories/worktrees/
+	// provider_sessions chain from the payload's cwd BEFORE persisting or
+	// evaluating — EvaluateTurn's very first pipeline step is
+	// SQLDataSource.Resolve(sessionID), which needs these rows to exist.
+	// The model stays nil: a UserPromptSubmit payload carries no model
+	// field, and unknown is not zero (Constitution/ADD principle 1) — the
+	// statusline hook fills provider_sessions.model when it observes one.
+	// On the `auspex evaluate` path (EvaluatePrompt), parsed.CWD is nil
+	// (the event is synthesized from prompt text, not a hook payload), so
+	// this is a documented no-op there: an offline evaluation targets a
+	// session some hook already registered, or honestly fails not_found.
+	deps.bootstrapSession(ctx, parsed.SessionID, parsed.CWD, nil)
+
 	observedAt := deps.Clock.Now()
 	event := deps.normalizer().NormalizeUserPromptSubmit(parsed, observedAt)
 
@@ -412,6 +462,11 @@ func HandleStop(ctx context.Context, deps HookDeps, stdin []byte) (StopResult, e
 	if err != nil {
 		return StopResult{}, nil //nolint:nilerr // fail-open: malformed hook input must not fail the Stop hook itself.
 	}
+	// Issue #17: Stop payloads DO carry a cwd (claudehooks.StopEvent.CWD),
+	// so a session whose first observed hook is a Stop — e.g. Auspex
+	// installed mid-session — still gets registered rather than staying
+	// invisible to Resolve until its next prompt.
+	deps.bootstrapSession(ctx, parsed.SessionID, parsed.CWD, nil)
 	observedAt := deps.Clock.Now()
 	event := deps.normalizer().NormalizeStop(parsed, observedAt)
 	persisted := deps.persist(ctx, []v1.Event{event})
@@ -438,6 +493,9 @@ func HandleStopFailure(ctx context.Context, deps HookDeps, stdin []byte) (StopFa
 	if err != nil {
 		return StopFailureResult{}, nil //nolint:nilerr // fail-open: malformed hook input must not fail the StopFailure hook itself.
 	}
+	// Issue #17: StopFailure payloads carry a cwd too — same reasoning as
+	// HandleStop above.
+	deps.bootstrapSession(ctx, parsed.SessionID, parsed.CWD, nil)
 	observedAt := deps.Clock.Now()
 	events := deps.normalizer().NormalizeStopFailure(parsed, observedAt)
 	persisted := deps.persist(ctx, events)

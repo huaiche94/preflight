@@ -204,6 +204,19 @@ func buildRootCmd(ctx context.Context) (root *cobra.Command, closeFn func() erro
 			// persisted hook events carry TaskID/ProgressNodeID whenever
 			// they resolve unambiguously.
 			SessionResolver: dataSource,
+			// Lazy in-hook session bootstrap (issue #17): every hook
+			// invocation registers its session's repositories/worktrees/
+			// provider_sessions chain from the payload's reported
+			// directory — over the SAME db and gitx client composed above
+			// — so SessionResolver/Resolve above (and the whole evaluation
+			// pipeline behind Evaluation/Forecast) has rows to find in
+			// real native-hook sessions, not just test-seeded databases.
+			Bootstrapper: &orchestrator.SessionBootstrapper{
+				DB:    db,
+				Git:   gitClient,
+				Clock: clk,
+				IDs:   ids,
+			},
 			// The REAL evaluation.Service doubles as the issue-#14
 			// forecast-card source (it satisfies orchestrator.
 			// ForecastCardSource — ForecastCard/LatestForecastCard read

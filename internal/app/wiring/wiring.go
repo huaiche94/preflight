@@ -121,6 +121,21 @@ type HookSupport struct {
 	// against (most tests, minimal compositions).
 	SessionResolver orchestrator.SessionResolver
 
+	// Bootstrapper optionally enables the issue-#17 lazy session
+	// bootstrap (internal/orchestrator/sessionbootstrap.go): when
+	// non-nil, every hook handler registers the session's repositories/
+	// worktrees/provider_sessions chain from the payload's reported
+	// directory before persisting/evaluating, which is what lets
+	// SQLDataSource.Resolve — and therefore the whole evaluation
+	// pipeline, the issue-#14 forecast card, and issue #1's TaskID
+	// correlation — actually work in real native-hook sessions instead
+	// of only in test-seeded databases. cmd/auspex/wire.go constructs
+	// the real value over the same *sqlite.DB and gitx.Client it already
+	// composes. nil disables registration (most tests, minimal
+	// compositions), degrading to the pre-issue-#17 behavior per
+	// orchestrator.HookDeps.Bootstrapper's own documented contract.
+	Bootstrapper *orchestrator.SessionBootstrapper
+
 	// Forecast optionally enables the issue-#14 forecast surfaces: the
 	// UserPromptSubmit hook's additionalContext card, the statusline
 	// --emit-line display, and `auspex evaluate`'s card output. Like
@@ -221,12 +236,13 @@ func (a *App) RootCmd() *cobra.Command {
 	root := cli.NewRootCmd()
 
 	hookDeps := orchestrator.HookDeps{
-		Clock:      a.services.Hooks.Clock,
-		IDs:        a.services.Hooks.IDs,
-		Persister:  a.services.Hooks.Persister,
-		TxRunner:   a.services.Hooks.TxRunner,
-		Evaluation: a.services.Evaluation,
-		Forecast:   a.services.Hooks.Forecast,
+		Clock:        a.services.Hooks.Clock,
+		IDs:          a.services.Hooks.IDs,
+		Persister:    a.services.Hooks.Persister,
+		TxRunner:     a.services.Hooks.TxRunner,
+		Evaluation:   a.services.Evaluation,
+		Forecast:     a.services.Hooks.Forecast,
+		Bootstrapper: a.services.Hooks.Bootstrapper,
 	}
 	if hookDeps.Clock == nil {
 		hookDeps.Clock = clock.New()
