@@ -120,6 +120,18 @@ type HookSupport struct {
 	// right degrade for callers with no session registry to resolve
 	// against (most tests, minimal compositions).
 	SessionResolver orchestrator.SessionResolver
+
+	// Forecast optionally enables the issue-#14 forecast surfaces: the
+	// UserPromptSubmit hook's additionalContext card, the statusline
+	// --emit-line display, and `preflight evaluate`'s card output. Like
+	// Decision.Issuer, only the REAL *internal/evaluation.Service
+	// satisfies orchestrator.ForecastCardSource (a card is a read-back of
+	// the persisted prediction/policy rows only the real service owns) —
+	// cmd/preflight/wire.go passes its evaluation.Service here. nil
+	// degrades every surface to its pre-issue-#14 output (no card block,
+	// model-only status line, `evaluate` without card numbers), per
+	// orchestrator.HookDeps.Forecast's own documented contract.
+	Forecast orchestrator.ForecastCardSource
 }
 
 // DiagnosticsSupport bundles the optional collaborators
@@ -214,6 +226,7 @@ func (a *App) RootCmd() *cobra.Command {
 		Persister:  a.services.Hooks.Persister,
 		TxRunner:   a.services.Hooks.TxRunner,
 		Evaluation: a.services.Evaluation,
+		Forecast:   a.services.Hooks.Forecast,
 	}
 	if hookDeps.Clock == nil {
 		hookDeps.Clock = clock.New()
@@ -240,6 +253,20 @@ func (a *App) RootCmd() *cobra.Command {
 		newHook := &cobra.Command{Use: "hook", Short: short}
 		newHook.AddCommand(cli.NewHookClaudeCmd(hookDeps))
 		return newHook
+	})
+
+	// evaluate (issue #14): swapped unconditionally, like progress/
+	// checkpoint/status, because its one required dependency (Evaluation)
+	// is a required service this container cannot exist without. It
+	// shares hookDeps with the hook subtree deliberately — `preflight
+	// evaluate` runs the SAME production evaluation path the
+	// UserPromptSubmit hook runs (orchestrator.EvaluatePrompt over the
+	// same normalizer/persister/evaluation/forecast collaborators), which
+	// is the whole point of issue #14 deliverable 5's "share code, don't
+	// duplicate". A nil Hooks.Forecast merely degrades the card output,
+	// per cli.NewEvaluateCmd's own contract.
+	replaceSubcommand(root, "evaluate", func(_ string) *cobra.Command {
+		return cli.NewEvaluateCmd(hookDeps)
 	})
 
 	checkpointDeps := orchestrator.CheckpointCreateDeps{

@@ -108,7 +108,8 @@ func NewHookClaudeCmd(deps orchestrator.HookDeps) *cobra.Command {
 }
 
 func newRealStatusLineCmd(deps orchestrator.HookDeps) *cobra.Command {
-	return &cobra.Command{
+	var emitLine bool
+	cmd := &cobra.Command{
 		Use:   "statusline",
 		Short: "Handle a Claude Code status-line hook event",
 		Args:  cobra.NoArgs,
@@ -117,6 +118,19 @@ func newRealStatusLineCmd(deps orchestrator.HookDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// --emit-line (issue #14 deliverable 4, resolving issue #12's
+			// friction #2): same ingest as the default path, PLUS one
+			// compact display line on stdout — Claude Code's statusLine
+			// command must print the visible line, and the ingest-only
+			// default blanks the user's status bar when wired directly.
+			if emitLine {
+				_, line, err := orchestrator.HandleStatusLineEmitLine(cmd.Context(), deps, stdin)
+				if err != nil {
+					return err
+				}
+				_, writeErr := cmd.OutOrStdout().Write([]byte(line + "\n"))
+				return writeErr
+			}
 			// HandleStatusLine is fail-open on malformed input (see
 			// hooks.go); its own returned error is reserved for a
 			// framework-level fault, not a parse failure, so no error
@@ -124,17 +138,19 @@ func newRealStatusLineCmd(deps orchestrator.HookDeps) *cobra.Command {
 			if _, err := orchestrator.HandleStatusLine(cmd.Context(), deps, stdin); err != nil {
 				return err
 			}
-			// ADD §22.6: composing with a previously-configured status
-			// line command is a separate, not-yet-built installer
-			// mechanism (see hooks.go's HandleStatusLine doc). Until
-			// that exists, this command's stdout contribution is
-			// intentionally empty — Preflight does not yet own
-			// rendering the visible status-line text, only observing
-			// it — so it never overwrites or duplicates whatever the
-			// user's actual status-line command already prints.
+			// Without --emit-line, behavior is byte-identical to the
+			// pre-issue-#14 command: ADD §22.6's compose-with-existing-
+			// status-line installer mechanism still does not exist, so
+			// the default stdout contribution stays intentionally empty —
+			// Preflight does not overwrite or duplicate whatever the
+			// user's previously-configured status-line command prints.
+			// Callers that want Preflight to OWN the line opt in via the
+			// flag (integrations/claude/hooks.json now does).
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&emitLine, "emit-line", false, "Also print a one-line status display (model + latest forecast) to stdout")
+	return cmd
 }
 
 func newRealUserPromptSubmitCmd(deps orchestrator.HookDeps) *cobra.Command {

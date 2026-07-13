@@ -17,18 +17,22 @@
 //     already emits a schema-versioned JSON envelope on success — this was
 //     already correct, and this file's job is to PROVE it holds uniformly,
 //     not to fix it.
-//   - version, init, evaluate, progress show, state show have no
-//     schema-versioned success JSON (version prints a bare string; the
-//     other four are permanent stubs — no CLI constructor for the real
-//     thing exists anywhere in this repository as of this node, for
-//     evaluate/init/progress show/state; only the notImplemented stub path
-//     is reachable). This is a real, pre-existing gap this audit surfaces
-//     explicitly (see TestErrorContract_KnownIncompleteCommands_AreStubsOnly
-//     below) rather than silently working around or papering over.
+//   - version, init, progress show, state show have no schema-versioned
+//     success JSON (version prints a bare string; the other three are
+//     permanent stubs — no CLI constructor for the real thing exists
+//     anywhere in this repository as of this node, for init/progress
+//     show/state; only the notImplemented stub path is reachable). This
+//     is a real, pre-existing gap this audit surfaces explicitly (see
+//     TestErrorContract_KnownIncompleteCommands_AreStubsOnly below)
+//     rather than silently working around or papering over.
 //     (`progress complete` is deliberately NOT in that list: issue #1
 //     added a real constructor for it — cli.NewProgressCmd, progress.go —
 //     whose subtree still keeps `show` as a stub; progress_test.go's
-//     TestProgressComplete_ShowRemainsStubOnRealTree tracks that split.)
+//     TestProgressComplete_ShowRemainsStubOnRealTree tracks that split.
+//     `evaluate` left the list the same way with issue #14:
+//     cli.NewEvaluateCmd, evaluate.go, is real and swapped in by
+//     internal/app/wiring.App.RootCmd(); only the bare NewRootCmd() tree
+//     keeps its stub, per the established stub-then-swap pattern.)
 //   - THE genuine, fixable gap: no command's returned *domain.Error was
 //     ever serialized to JSON anywhere before this node — every command
 //     constructed the right typed Go value, but Cobra's own default error
@@ -52,9 +56,13 @@
 //     path reference.
 //
 // Privacy gate: every command that touches prompt-adjacent data
-// (evaluate's stub, decision allow/deny, hook claude user-prompt-submit)
+// (evaluate, decision allow/deny, hook claude user-prompt-submit)
 // only ever accepts/threads a PromptHash (a hash, internal/app.ports.go's
-// frozen field), never raw prompt text — confirmed by a dedicated grep
+// frozen field) — except `evaluate --prompt-file`, which by design reads
+// raw prompt TEXT and hashes it immediately in memory
+// (orchestrator.EvaluatePrompt / claudehooks.NewUserPromptSubmitEvent;
+// evaluate_test.go and internal/integrationtest's evaluate privacy test
+// prove the text never reaches output or disk) — confirmed by a dedicated grep
 // audit across internal/cli, internal/orchestrator, internal/app/wiring
 // (zero hits for any raw-prompt field crossing those boundaries) and
 // proven directly below (TestErrorContract_NoRawPromptInAnyErrorOrOutput)
@@ -190,19 +198,20 @@ func TestErrorContract_RenderErrorJSON_NonDomainError(t *testing.T) {
 // TestErrorContract_KnownIncompleteCommands_AreStubsOnly documents,
 // explicitly and as a checked test rather than only a code comment, the
 // one pre-existing gap this audit found that is out of this node's own
-// scope to fix: init, evaluate, progress show, and state show have no
-// real CLI constructor anywhere in this repository (unlike checkpoint
-// create, decision allow/deny, pause request/cancel, resume, scheduler
-// run-once, status, and doctor, all of which have one) — every path to
-// them, even through internal/app/wiring.App.RootCmd(), is permanently
+// scope to fix: init, progress show, and state show have no real CLI
+// constructor anywhere in this repository (unlike checkpoint create,
+// decision allow/deny, pause request/cancel, resume, scheduler run-once,
+// status, doctor — and, since issue #14, evaluate: cli.NewEvaluateCmd is
+// real, so `evaluate` was removed from this list per this test's own
+// update-the-scope-note instruction) — every path to the remaining
+// three, even through internal/app/wiring.App.RootCmd(), is permanently
 // cli.notImplemented's stub. This test fails loudly (rather than staying
 // silently true forever) the moment a future node adds a real constructor
-// for any of these four, so this documented gap is re-confirmed or
-// corrected on every test run instead of silently going stale.
+// for any of them, so this documented gap is re-confirmed or corrected on
+// every test run instead of silently going stale.
 func TestErrorContract_KnownIncompleteCommands_AreStubsOnly(t *testing.T) {
 	incomplete := [][]string{
 		{"init"},
-		{"evaluate"},
 		{"progress", "show"},
 		{"state", "show"},
 	}

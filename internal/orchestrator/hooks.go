@@ -22,7 +22,11 @@
 //
 // Every handler in this file:
 //   - never logs or returns raw prompt text (only the pre-hashed
-//     UserPromptSubmitEvent fields ever touch this package);
+//     UserPromptSubmitEvent fields ever touch this file's handlers; the
+//     one deliberate raw-text entry point in this package is
+//     evaluateprompt.go's EvaluatePrompt, which hashes immediately via
+//     claudehooks.NewUserPromptSubmitEvent — see that file's own
+//     privacy-boundary doc);
 //   - returns the frozen domain.Error shape (code/message/retryable/
 //     details) on internal failure, distinct from a hook's own semantic
 //     "block" decision (which is not an error — see HandleUserPromptSubmit);
@@ -39,6 +43,7 @@ import (
 
 	"github.com/huaiche94/preflight/internal/app"
 	"github.com/huaiche94/preflight/internal/domain"
+	"github.com/huaiche94/preflight/internal/evaluation"
 	claudehooks "github.com/huaiche94/preflight/internal/hooks/claude"
 	claudeprovider "github.com/huaiche94/preflight/internal/providers/claude"
 	claudetelemetry "github.com/huaiche94/preflight/internal/telemetry/claude"
@@ -57,6 +62,24 @@ type EventPersister interface {
 	PersistAll(ctx context.Context, runner app.TxRunner, evs []v1.Event) error
 }
 
+// ForecastCardSource reads back the issue-#14 forecast card for an
+// evaluation (internal/evaluation/forecastcard.go). A narrow local
+// interface over the concrete *evaluation.Service's two card methods —
+// deliberately NOT the frozen app.EvaluationService (which has no card
+// methods and must not be widened; ADR-043 keeps contract impact
+// additive) — following the same only-the-real-service pattern
+// decision.go's AuthorizationIssuer established: a fake can satisfy
+// app.EvaluationService alone, but a card requires the real persisted
+// prediction/policy rows only *evaluation.Service can read back.
+type ForecastCardSource interface {
+	// ForecastCard returns the card for one evaluation ID (the hook path:
+	// HandleUserPromptSubmit just ran that evaluation).
+	ForecastCard(ctx context.Context, id domain.EvaluationID) (evaluation.ForecastCard, error)
+	// LatestForecastCard returns the most recent card linkable to a
+	// session, ok=false on cold start (the statusline --emit-line path).
+	LatestForecastCard(ctx context.Context, sessionID domain.SessionID) (evaluation.ForecastCard, bool, error)
+}
+
 // HookDeps bundles a hook handler's collaborators. Clock/IDs feed the
 // Normalizer (claude-provider-04's real, already-integrated
 // implementation — not a fake). TxRunner is required only when Persister
@@ -67,6 +90,11 @@ type EventPersister interface {
 // (correlate.go — the issue #1 event-correlation component); nil keeps the
 // pre-correlation behavior (events persisted with SessionID only), the
 // same nil-is-a-documented-degrade convention Persister already uses.
+// Forecast, when non-nil, renders the issue-#14 forecast card into
+// UserPromptSubmit's additionalContext and the statusline's --emit-line
+// output; nil (and any card-read error) degrades to exactly the
+// pre-issue-#14 responses — the card is presentation on top of the hook
+// contract, never a new failure mode for it.
 type HookDeps struct {
 	Clock      domain.Clock
 	IDs        domain.IDGenerator
@@ -74,6 +102,7 @@ type HookDeps struct {
 	TxRunner   app.TxRunner
 	Evaluation app.EvaluationService
 	Correlator *EventCorrelator
+	Forecast   ForecastCardSource
 }
 
 func (d HookDeps) normalizer() *claudetelemetry.Normalizer {
@@ -137,9 +166,21 @@ type StatusLineResult struct {
 // unavailability. internal/cli's command wraps this to guarantee the
 // process still exits 0 with harmless output; see hook.go.
 func HandleStatusLine(ctx context.Context, deps HookDeps, stdin []byte) (StatusLineResult, error) {
+	_, result, _ := statusLineIngest(ctx, deps, stdin)
+	return result, nil
+}
+
+// statusLineIngest is the shared parse+normalize+persist core behind
+// HandleStatusLine and HandleStatusLineEmitLine, factored out (rather
+// than one handler calling the other) because the emit-line variant also
+// needs the parsed snapshot itself (model identity, session ID) which
+// HandleStatusLine's result deliberately does not carry. parsedOK=false
+// means the stdin was malformed — the same fail-open condition
+// HandleStatusLine has always swallowed.
+func statusLineIngest(ctx context.Context, deps HookDeps, stdin []byte) (claudeprovider.StatusLineSnapshot, StatusLineResult, bool) {
 	snap, err := claudeprovider.ParseStatusLine(stdin)
 	if err != nil {
-		return StatusLineResult{}, nil //nolint:nilerr // fail-open: malformed status-line input must not break the status line itself.
+		return claudeprovider.StatusLineSnapshot{}, StatusLineResult{}, false
 	}
 
 	observedAt := deps.Clock.Now()
@@ -147,7 +188,52 @@ func HandleStatusLine(ctx context.Context, deps HookDeps, stdin []byte) (StatusL
 
 	result := StatusLineResult{EventsNormalized: len(events)}
 	result.Persisted = deps.persist(ctx, events)
-	return result, nil
+	return snap, result, true
+}
+
+// HandleStatusLineEmitLine implements `preflight hook claude statusline
+// --emit-line` (issue #14 deliverable 4, resolving issue #12's recorded
+// friction #2: Claude Code's statusLine command must PRINT the display
+// line — wiring the ingest-only handler directly blanks the user's status
+// bar). It performs exactly HandleStatusLine's ingest (same parse, same
+// normalize, same best-effort persist — statusLineIngest is the single
+// shared implementation, so the two cannot drift) and additionally
+// composes the one-line display text:
+//
+//	pf✈ <model> | est P50 <tokens>tok ~$<low>–<high> | <policy action>
+//
+// using the latest persisted evaluation for the session when one exists
+// (deps.Forecast.LatestForecastCard), else just "pf✈ <model>". Every
+// degradation is fail-open into a shorter line, never an error and never
+// an empty line: malformed stdin renders bare "pf✈", a missing model
+// omits the model segment, a missing/errored card omits the forecast
+// segments — a status line must keep rendering even when Preflight cannot
+// parse its own input (the same ADD §17.5 discipline HandleStatusLine
+// already documents).
+func HandleStatusLineEmitLine(ctx context.Context, deps HookDeps, stdin []byte) (StatusLineResult, string, error) {
+	snap, result, parsedOK := statusLineIngest(ctx, deps, stdin)
+	if !parsedOK {
+		return result, evaluation.StatusLineText("", nil), nil
+	}
+
+	model := ""
+	switch {
+	case snap.ModelDisplayName != nil && *snap.ModelDisplayName != "":
+		model = *snap.ModelDisplayName
+	case snap.ModelID != nil && *snap.ModelID != "":
+		model = *snap.ModelID
+	}
+
+	var card *evaluation.ForecastCard
+	if deps.Forecast != nil {
+		if c, ok, err := deps.Forecast.LatestForecastCard(ctx, snap.SessionID); err == nil && ok {
+			card = &c
+		}
+		// err != nil / ok=false both degrade to the model-only line —
+		// cold start and a card-read failure look identical here by
+		// design; the status bar is no place for an error message.
+	}
+	return result, evaluation.StatusLineText(model, card), nil
 }
 
 // --- preflight hook claude user-prompt-submit -------------------------------
@@ -193,50 +279,116 @@ func HandleUserPromptSubmit(ctx context.Context, deps HookDeps, stdin []byte) (U
 		}, nil
 	}
 
-	observedAt := deps.Clock.Now()
-	event := deps.normalizer().NormalizeUserPromptSubmit(parsed, observedAt)
-	persisted := deps.persist(ctx, []v1.Event{event})
+	pe, err := evaluateSubmittedPrompt(ctx, deps, parsed)
 
 	result := UserPromptSubmitResult{
 		Response:         claudehooks.UserPromptSubmitResponse{Decision: claudehooks.HookDecisionAllow},
 		EventsNormalized: 1,
-		Persisted:        persisted,
+		Persisted:        pe.persisted,
 	}
-
-	if deps.Evaluation == nil {
-		return result, nil
-	}
-
-	turnID := domain.TurnID(deps.IDs.NewID())
-	eval, err := deps.Evaluation.EvaluateTurn(ctx, app.EvaluateTurnRequest{
-		SessionID:  parsed.SessionID,
-		TurnID:     turnID,
-		Provider:   "claude",
-		PromptHash: parsed.PromptSHA256,
-	})
 	if err != nil {
-		// An evaluation-pipeline failure is an operational gap, not a
-		// reason to block the user's prompt (ADD §17.5: "predictor error
-		// -> fallback heuristic"); this handler's fallback is the plain
-		// allow response already set above.
+		// No EvaluationService wired, or an evaluation-pipeline failure —
+		// either way an operational gap, not a reason to block the user's
+		// prompt (ADD §17.5: "predictor error -> fallback heuristic");
+		// this handler's fallback is the plain allow response above.
 		//nolint:nilerr // deliberate fail-open, see the function doc comment above.
 		return result, nil
 	}
 	result.Evaluated = true
 
-	decision, err := deps.Evaluation.Decide(ctx, app.DecideRequest{EvaluationID: eval.ID})
-	if err != nil {
-		//nolint:nilerr // deliberate fail-open, see the function doc comment above.
-		return result, nil
-	}
-
-	if decision.Action == app.PolicyBlock {
-		result.Response = claudehooks.UserPromptSubmitResponse{
-			Decision: claudehooks.HookDecisionBlock,
-			Reason:   "Preflight evaluation " + string(eval.ID) + " requires a checkpoint or explicit override before this task starts.",
+	// Issue #14 deliverable 3: render the forecast card into the hook
+	// response's additionalContext so the coding agent literally sees the
+	// scope/token/cost/risk estimate before acting. Strictly additive and
+	// fail-open: a nil Forecast source or a card-read error leaves
+	// additional empty, degrading to exactly the pre-issue-#14 response —
+	// the card must never become a new way for the hook to fail.
+	additional := ""
+	if deps.Forecast != nil {
+		if card, cardErr := deps.Forecast.ForecastCard(ctx, pe.evaluation.ID); cardErr == nil {
+			additional = card.AdditionalContext()
 		}
 	}
+
+	if pe.decision.Action == app.PolicyBlock {
+		result.Response = claudehooks.UserPromptSubmitResponse{
+			Decision:          claudehooks.HookDecisionBlock,
+			Reason:            "Preflight evaluation " + string(pe.evaluation.ID) + " requires a checkpoint or explicit override before this task starts.",
+			AdditionalContext: additional,
+		}
+	} else {
+		result.Response.AdditionalContext = additional
+	}
 	return result, nil
+}
+
+// errNoEvaluationService is evaluateSubmittedPrompt's typed error for a
+// nil Evaluation dependency. HandleUserPromptSubmit swallows it (nil
+// EvaluationService is a documented degrade path there); EvaluatePrompt
+// propagates it (a CLI evaluation with no service is a real,
+// user-visible composition gap, not something to silently allow past).
+var errNoEvaluationService = &domain.Error{
+	Code:      domain.ErrCodeUnavailable,
+	Message:   "orchestrator: no EvaluationService wired",
+	Retryable: false,
+}
+
+// promptEvaluation is evaluateSubmittedPrompt's result: the shared
+// normalize -> persist -> evaluate -> decide outcome both
+// HandleUserPromptSubmit (fail-open) and EvaluatePrompt (fail-closed)
+// consume. persisted is valid even when the returned error is non-nil —
+// the telemetry write happens before, and independently of, the
+// evaluation itself, exactly as it always has.
+type promptEvaluation struct {
+	turnID     domain.TurnID
+	persisted  bool
+	evaluation app.Evaluation
+	decision   app.DecisionResult
+}
+
+// evaluateSubmittedPrompt runs the single production path from a parsed
+// (already privacy-safe: hash/length/approx-tokens only) prompt event to
+// a persisted evaluation + policy decision. Shared verbatim by the
+// UserPromptSubmit hook and `preflight evaluate` (issue #14 deliverable
+// 5's "share code, don't duplicate"), so an offline evaluation is the
+// same evaluation a hook would have produced.
+//
+// One TurnID is minted and used for BOTH the persisted
+// provider.turn.started event and EvaluateTurn — stamping the event
+// (event.TurnID) is what links this session's events to the turn-scoped
+// prediction row (migration 0041 has no session column), which is exactly
+// the linkage evaluation.(*Service).LatestForecastCard's statusline query
+// joins on. Before issue #14 the event carried no turn_id and the minted
+// TurnID existed only on the prediction row, leaving persisted
+// evaluations unreachable from their session.
+func evaluateSubmittedPrompt(ctx context.Context, deps HookDeps, parsed claudehooks.UserPromptSubmitEvent) (promptEvaluation, error) {
+	observedAt := deps.Clock.Now()
+	event := deps.normalizer().NormalizeUserPromptSubmit(parsed, observedAt)
+
+	pe := promptEvaluation{turnID: domain.TurnID(deps.IDs.NewID())}
+	event.TurnID = string(pe.turnID)
+	pe.persisted = deps.persist(ctx, []v1.Event{event})
+
+	if deps.Evaluation == nil {
+		return pe, errNoEvaluationService
+	}
+
+	eval, err := deps.Evaluation.EvaluateTurn(ctx, app.EvaluateTurnRequest{
+		SessionID:  parsed.SessionID,
+		TurnID:     pe.turnID,
+		Provider:   "claude",
+		PromptHash: parsed.PromptSHA256,
+	})
+	if err != nil {
+		return pe, err
+	}
+	pe.evaluation = eval
+
+	decision, err := deps.Evaluation.Decide(ctx, app.DecideRequest{EvaluationID: eval.ID})
+	if err != nil {
+		return pe, err
+	}
+	pe.decision = decision
+	return pe, nil
 }
 
 // --- preflight hook claude stop / stop-failure ------------------------------

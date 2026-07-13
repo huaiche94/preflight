@@ -8,6 +8,7 @@ import (
 	"github.com/huaiche94/preflight/internal/app"
 	"github.com/huaiche94/preflight/internal/domain"
 	"github.com/huaiche94/preflight/internal/policy"
+	"github.com/huaiche94/preflight/internal/pricing"
 	"github.com/huaiche94/preflight/internal/storage/sqlite"
 )
 
@@ -35,6 +36,14 @@ type Service struct {
 	// (Authorization.ExpiresAt = IssuedAt + AuthorizationTTL). Defaults to
 	// DefaultAuthorizationTTL when zero.
 	AuthorizationTTL time.Duration
+
+	// Pricing is the ADR-043 cost-forecast price table ForecastCard uses
+	// to turn persisted token quantiles into an estimated cost range.
+	// Optional, unlike New's required dependencies: nil means
+	// pricing.DefaultTable() (see forecastcard.go's pricingTable), so
+	// every existing construction site keeps working unchanged and a
+	// composition root that wants overridden prices sets this explicitly.
+	Pricing *pricing.Table
 }
 
 var _ app.EvaluationService = (*Service)(nil)

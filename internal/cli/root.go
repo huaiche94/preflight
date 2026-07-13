@@ -94,9 +94,12 @@ func newInitCmd() *cobra.Command {
 	}
 }
 
-// newEvaluateCmd builds `preflight evaluate` (ADD §9.9 EvaluationService).
-// Stub: depends on internal/orchestrator wiring the predictor pipeline,
-// not built this wave.
+// newEvaluateCmd builds the standalone-stub `preflight evaluate` leaf
+// (ADD §9.9 EvaluationService). A stub ONLY on this bare tree —
+// internal/app/wiring.App.RootCmd() replaces it with NewEvaluateCmd's
+// real handler (evaluate.go, issue #14 deliverable 5), the same
+// stub-then-swap pattern `hook`/`progress`/`checkpoint` follow: a caller
+// with no wired services still gets an honest "not yet available".
 func newEvaluateCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "evaluate",

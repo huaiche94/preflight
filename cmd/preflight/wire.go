@@ -204,6 +204,17 @@ func buildRootCmd(ctx context.Context) (root *cobra.Command, closeFn func() erro
 			// persisted hook events carry TaskID/ProgressNodeID whenever
 			// they resolve unambiguously.
 			SessionResolver: dataSource,
+			// The REAL evaluation.Service doubles as the issue-#14
+			// forecast-card source (it satisfies orchestrator.
+			// ForecastCardSource — ForecastCard/LatestForecastCard read
+			// back the prediction/policy rows EvaluateTurn persists), so
+			// the UserPromptSubmit hook's additionalContext, the
+			// statusline --emit-line display, and `preflight evaluate`
+			// all render the same persisted forecast. Cost estimates use
+			// pricing.DefaultTable() (evaluation.Service.Pricing nil —
+			// ADR-043's config override is a documented follow-up, see
+			// internal/pricing's package comment).
+			Forecast: evaluationService,
 		},
 		Diagnostics: wiring.DiagnosticsSupport{
 			DB: db,

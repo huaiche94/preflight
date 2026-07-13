@@ -65,16 +65,31 @@ func ParseUserPromptSubmit(raw []byte) (UserPromptSubmitEvent, error) {
 		prompt = *r.Prompt
 	}
 
-	sum := sha256.Sum256([]byte(prompt))
+	ev := NewUserPromptSubmitEvent(domain.SessionID(r.SessionID), prompt)
+	ev.TranscriptPath = r.TranscriptPath
+	ev.CWD = r.CWD
+	return ev, nil
+}
 
+// NewUserPromptSubmitEvent builds the privacy-safe UserPromptSubmitEvent
+// directly from raw prompt text, hashing it immediately so the raw string
+// never survives past this function's stack frame — the exact same
+// derivation ParseUserPromptSubmit applies to a real hook payload (it now
+// calls this). Exported for `preflight evaluate` (issue #14 deliverable
+// 5), which receives prompt text from a file/stdin instead of a hook
+// payload but MUST derive the identical hash/length/approx-token features
+// so an offline evaluation and a hook evaluation of the same prompt are
+// indistinguishable downstream (same PromptHash on the persisted event
+// and prediction row, same size-only signal for the classifier). Callers
+// must not log or persist the input (Constitution §7 rule 2).
+func NewUserPromptSubmitEvent(sessionID domain.SessionID, prompt string) UserPromptSubmitEvent {
+	sum := sha256.Sum256([]byte(prompt))
 	return UserPromptSubmitEvent{
-		SessionID:          domain.SessionID(r.SessionID),
-		TranscriptPath:     r.TranscriptPath,
-		CWD:                r.CWD,
+		SessionID:          sessionID,
 		PromptSHA256:       hex.EncodeToString(sum[:]),
 		PromptByteLength:   len(prompt),
 		PromptApproxTokens: approxTokenCount(prompt),
-	}, nil
+	}
 }
 
 // approxTokenCount is a coarse, provider-agnostic estimate (roughly 4 bytes

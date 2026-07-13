@@ -80,6 +80,27 @@ calls these functions, and writes the wire response documented in
 not this role's — only the primitives it will call are this role's
 deliverable.
 
+## Status line: `--emit-line` (issue #14; resolves issue #12 friction #2)
+
+Claude Code's `statusLine` command is expected to PRINT the visible
+status-bar line — but `preflight hook claude statusline` was originally
+ingest-only (parse + normalize + persist, no stdout), so wiring it
+directly blanked the user's status bar (recorded as friction #2 on issue
+#12; the dogfooding install worked around it with a tee-wrapper script).
+`hooks.json`'s `statusLine` entry now uses `--emit-line`, which keeps the
+exact same ingest behavior AND prints one compact display line:
+
+```text
+pf✈ <model> | est P50 <tokens>tok ~$<low>–<high> | <policy action>
+```
+
+using the latest persisted evaluation/forecast for the session when one
+exists, else just `pf✈ <model>`. Without the flag the command remains
+byte-identical to its previous ingest-only behavior (no stdout), for any
+installation that still composes Preflight with its own status-line
+command. Cost is an estimated range from `internal/pricing`'s default
+table (ADR-043) — an uncalibrated estimate, never a measured cost.
+
 ## Installer behavior not modeled here
 
 `Preflight_ADD.md` §22.6 ("Compose existing status line") describes
