@@ -709,3 +709,42 @@ assumptions:
   - "No cross-role contract gap found; no ports.go change requested. No production code in internal/progress or internal/statecheckpoint needed any change — every mechanism this node exercises (CompleteNode.Run, Service.Create/Snapshot/LoadLatest/Verify, both Reconcile methods) was already correct; this node's entire value is the proof, not a fix."
 blockers: none
 ```
+
+### checkpoint-b09: Part B final security gate
+
+```yaml
+node: checkpoint-b09
+status: completed
+artifacts:
+  - internal/repocheckpoint/security.go                       # NEW: safeArtifactPath (manifest-declared artifact path validation) + safeRelativeName (writeArtifactDir files-map-key validation)
+  - internal/repocheckpoint/verify.go                         # FIX: Verify now calls safeArtifactPath before joining a manifest artifact's Path onto ArtifactRoot, instead of joining it unchecked
+  - internal/repocheckpoint/atomicwrite.go                    # HARDENING: writeArtifactDir now calls safeRelativeName on every files map key before writing, defense in depth
+  - internal/repocheckpoint/capture.go                        # HARDENING: Capture now rejects a CheckpointID that is not a safe relative path segment before joining it onto ArtifactsRoot
+  - internal/repocheckpoint/security_adversarial_internal_test.go  # NEW, white-box (package repocheckpoint): unit coverage of safeArtifactPath/safeRelativeName + writeArtifactDir's own defense-in-depth rejection
+  - internal/repocheckpoint/security_adversarial_test.go       # NEW, external (package repocheckpoint_test): end-to-end adversarial fixtures through the real Capture/Verify pipeline
+validation:
+  - "gofmt -l internal/repocheckpoint internal/gitx -> empty"
+  - "go build ./... -> OK"
+  - "go vet ./internal/repocheckpoint/... ./internal/gitx/... -> OK"
+  - "go test ./internal/repocheckpoint/... ./internal/gitx/... -race -v -> PASS (full suite, zero regressions, including every new adversarial test)"
+  - "go test ./internal/repocheckpoint/... ./internal/gitx/... -race -count=2 -> PASS, stable (no flakiness)"
+  - "go test ./... -race -> green whole-repo"
+  - "golangci-lint run ./internal/repocheckpoint/... ./internal/gitx/... -> 0 issues"
+  - "golangci-lint run ./... (whole repo) -> 0 issues"
+commit: (recorded below)
+next_action: none — this was this role's LAST assigned DAG node (a01-a09, b01-b09 all complete)
+assumptions:
+  - "GENUINE SECURITY FINDING, not merely a test-writing exercise: while auditing every path-join in Part B for the adversarial fixtures this node's own DAG risk callout demands, found that Verify (verify.go) joined manifest.Artifacts[].Path directly onto row.ArtifactRoot with NO traversal/symlink validation at all — unlike validateUntrackedPath's identical treatment of git-reported untracked paths (security.go, checkpoint-b04). manifest.json is read fresh from disk on every Verify/RestoreDryRun call (RestoreDryRun's own checksum step calls Verify first) and is an ordinary file for as long as a checkpoint directory exists — nothing prevents it from later being hand-edited, corrupted, or restored from an untrusted source. Confirmed exploitable with a standalone reproduction BEFORE fixing it: a manifest with one artifact path rewritten to a '../'-laden relative path made Verify open, stat, and SHA-256 a file completely outside the checkpoint's own directory (its computed hash appeared in the mismatch report, proving the read happened). Fixed with a new safeArtifactPath guard (security.go) mirroring validateUntrackedPath's exact posture (no '..' segment, no absolute path, resolved path must stay under ArtifactRoot, neither the leaf nor any ancestor directory may be a symlink) applied to manifest-declared paths instead of git-reported ones. TestVerify_ManifestArtifactPathTraversal_Rejected (security_adversarial_test.go) is the permanent regression test, built by hand-tampering a REAL manifest.json produced by a REAL Capture call (not a synthetic fixture), and additionally asserts the secret file's actual content never leaks into the returned problem report."
+  - "Two further defense-in-depth hardenings applied proactively (not confirmed independently exploitable through any current production caller, but closing the same class of gap before qa-06 or a future caller could reintroduce it): (1) writeArtifactDir (atomicwrite.go) now validates every files map key via a new safeRelativeName check before joining it under tempDir — today's only caller (capture.go) always supplies a small fixed set of literal names, but writeArtifactDir is this package's own general atomic-write primitive, not a Capture-only helper, so it should not rely on every future caller re-deriving the same safety property independently; (2) Capture itself (capture.go) now rejects a CheckpointID that is not a safe relative path segment before joining it onto ArtifactsRoot — CheckpointID is a public-API field, and while production wiring always supplies a domain.IDGenerator-produced opaque ID, this function's own contract does not otherwise prevent a caller from passing untrusted input. Both are unit-tested directly (security_adversarial_internal_test.go) AND proven not to break Capture's real files-map/CheckpointID usage (the full pre-existing suite stayed green with zero changes to any non-adversarial test)."
+  - "Required-tests inventory reviewed against every earlier b02-b08 node before writing anything new (agents/checkpoint.md Part B's full list: tracked/staged/unstaged/untracked, rename/delete, binary file, spaces/newlines in path, nested worktree, concurrent mutation, temp cleanup, path traversal, oversize, secret-like file exclusion) — every one already has real coverage from b04-b08. This node's genuine increment, per its own DAG risk callout ('path traversal/symlink escape tests are a security gate'), is: (a) the manifest-path-traversal finding above; (b) a nested-directory-via-symlink escape (deeper than security_test.go's existing single top-level-symlink case) and a dangling-symlink case (target does not exist at all); (c) a malicious CheckpointID (both '../' and absolute-path shapes); (d) an embedded-NEWLINE-byte filename (a real, platform-permitted special-character shape distinct from the existing spaces-in-path test, proven to survive this package's NUL-terminated `-z` parsing); (e) a combined oversize-file-plus-symlink-escape single capture, proving the two independent guards both fire correctly together rather than one masking the other. Every fixture asserts the malicious path/content NEVER appears inside the produced archive/temp-directory tree, not merely that the call didn't error."
+  - "Every adversarial fixture uses only argv-based gitx.Client calls (Constitution §7 rule 5) — the malicious inputs are filesystem-level (real symlinks via os.Symlink, a real hand-edited manifest.json, a crafted CheckpointID string) rather than attempted shell-command injection, since this whole codebase already never constructs a shell command string anywhere; the actual risk surface for this role is path-join safety, not command injection, which is exactly what this node's fixtures target."
+  - "No cross-role contract gap found; no ports.go change requested. No schema/migration change — this node is pure Go-level hardening plus tests, entirely within internal/repocheckpoint (+ its own test files); internal/gitx was touched only by running its existing suite as a regression check, no gitx file was edited."
+blockers: none
+```
+
+Final validation after both Wave 9 nodes together: `golangci-lint run ./...`
+(whole repo) → 0 issues; `go build ./...` → OK; `go vet ./...` → OK;
+`go test ./... -race` → green across every package, zero regressions. This
+completes every DAG node ever assigned to the `checkpoint` role — Part A
+(a01-a09) and Part B (b01-b09) are both fully complete; no further nodes
+remain in this role's scope per `EXECUTION_DAG.md`.
