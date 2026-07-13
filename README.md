@@ -144,6 +144,85 @@ UserPromptSubmit / Stop / StopFailure / statusline events through
 `preflight hook claude <event>`. The [Signals](#signals) and
 [Actions](#actions) sections above describe what you get once wired.
 
+### What you'll see
+
+Preflight is a headless CLI — its "interface" is schema-versioned JSON on
+stdout plus the hook responses Claude Code receives. Everything below is
+**real captured output** (a live run of the compiled binary, or golden
+files recorded by the test suite), not mockups.
+
+**The per-prompt gate** — what Claude Code receives back from the
+UserPromptSubmit hook. An allowed prompt gets a pass-through `{}`; a
+blocked one gets a decision the agent itself can read and act on:
+
+```json
+{
+  "decision": "block",
+  "reason": "Preflight evaluation eval_123 requires a checkpoint or explicit override before this task starts.",
+  "hookSpecificOutput": {
+    "hookEventName": "UserPromptSubmit",
+    "additionalContext": "Use the durable Preflight Progress Tree and checkpoint policy."
+  }
+}
+```
+
+**Environment health** — `preflight doctor` (live run, freshly-migrated DB):
+
+```json
+{"schema_version":"preflight.doctor.v1","healthy":true,"checks":[
+  {"name":"database","status":"ok","detail":"reachable, schema version 52"},
+  {"name":"config","status":"skipped","detail":"no config loader configured"}]}
+```
+
+**Checkpoint + one-time authorization** — `preflight checkpoint create`
+and `preflight decision allow` (golden outputs from
+[`internal/cli/testdata/golden/`](internal/cli/testdata/golden/)):
+
+```json
+{
+  "schema_version": "preflight.checkpoint-create.v1",
+  "state_checkpoint_id": "sc-golden-1",
+  "repository_checkpoint_id": "rc-golden-1",
+  "repository_checkpoint_git_head": "cafef00dcafef00dcafef00dcafef00dcafef00d"
+}
+```
+
+```json
+{
+  "schema_version": "preflight.decision-allow.v1",
+  "issued": true,
+  "consumed": false,
+  "authorization_id": "auth-golden-1",
+  "action": "REQUIRE_CONFIRMATION"
+}
+```
+
+**The error contract** — every command fails with the same typed,
+machine-readable shape (live run; raw prompt text never appears in any
+output, FR-160/privacy contract):
+
+```json
+{"schema_version":"preflight.error.v1","code":"validation",
+ "message":"pause request: --reason must be one of \"calibrated_hit_probability\", \"emergency_uncalibrated\"",
+ "retryable":false,"details":{"reason":"quota_hit"}}
+```
+
+**Planned, not built yet** — the human-facing at-a-glance surface is the
+M12 VS Code companion ([#10](https://github.com/huaiche94/preflight/issues/10),
+blocked on the M6 daemon [#7](https://github.com/huaiche94/preflight/issues/7)):
+a sidebar with Quota & Runway / Risk Factors / Progress Tree /
+Checkpoints / Paused Tasks views, and a status bar per ADD §25.3:
+
+```text
+$(shield) Preflight: 5h 87% · 10m 83% · node 3/7
+$(debug-pause) Preflight paused · resumes after 22:14
+```
+
+A richer per-prompt forecast card (tokens/cost/scope on every prompt) is
+tracked in [#14](https://github.com/huaiche94/preflight/issues/14). There
+is deliberately no standalone usage dashboard — ADD §4.1 scopes that out
+as an adjacent product category.
+
 ### Validate a change
 
 Every wave of this repo's own build was gated on exactly these, and they
