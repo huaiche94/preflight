@@ -9,17 +9,25 @@ gracefully pause, or block that turn.
 It answers a different question than checkpoint/resume/memory tools do:
 not "how do we continue?" but **"should we even start this turn?"**
 
-> **Project status: vertical slice feature-complete (Wave 12 of 12, integrated).**
-> Bootstrap (Stage-0 contract freeze) and Waves 1-12 are integrated on
-> `main`. **Every feature role — `foundation`, `claude-provider`,
-> `checkpoint`, `predictor`, `runtime`, and `qa` — has completed its
-> entire vertical-slice DAG scope.** qa's final severity report found no P0s;
-> one P1 remains open (no production adapter yet connects a persisted
-> provider event to Progress Tree node completion —
-> [#1](https://github.com/huaiche94/preflight/issues/1)). Only the Final
+> **Project status: vertical slice complete (85/85 DAG nodes, Final gate passed).**
+> Bootstrap (Stage-0 contract freeze), Waves 1-12, and the Final
 > integration gate (`contract-integrator-final`, Stage 5,
-> [#2](https://github.com/huaiche94/preflight/issues/2)) remains. See
-> the [Wave roadmap](#wave-roadmap) below and
+> [#2](https://github.com/huaiche94/preflight/issues/2), closed) are all
+> integrated on `main`. Every feature role completed its entire DAG scope,
+> and the Final gate's own cross-role contradiction review found and
+> closed the one real gap it exists to catch: `cmd/preflight/main.go` was
+> still a stub, and two of five frozen service ports (plus predictor's
+> `DataSource` seam) had never been assembled into real implementations —
+> every individual piece was correct and tested, but the actual binary
+> was never wired to any of it. Closed via three routed corrective
+> additions plus the lead's own reserved root-composition work; see
+> `docs/implementation/vertical-slice/contract-integrator.md`'s "Stage 5"
+> section for the full report. One P1 remains open (no production adapter
+> yet connects a persisted provider event to Progress Tree node
+> completion — [#1](https://github.com/huaiche94/preflight/issues/1)),
+> plus a groomed backlog of post-slice follow-ups
+> ([#3](https://github.com/huaiche94/preflight/issues/3)-[#16](https://github.com/huaiche94/preflight/issues/16)).
+> See the [Wave roadmap](#wave-roadmap) below and
 > `docs/implementation/vertical-slice/EXECUTION_DAG.md` for task-level status.
 > Milestone gating per `Preflight_ADD.md` §31 still applies.
 
@@ -137,7 +145,7 @@ planning) and must respect the DAG's stage and dependency order.
 | Wave 10 | runtime-a11 · runtime-b09 | ✅ Integrated (`a249ca2`) — closed two genuine gaps: a missing TurnInterrupter-to-PauseRecord wiring path, and no CLI command ever serialized its typed error to JSON (Cobra's default printer flattened it to plain text) |
 | Wave 11 | runtime-b10 | ✅ Integrated (`2fbc0c8`) — completes **runtime** entirely (a01-a11/b01-b10, 21 nodes across 9 waves); proved in-process restart on the same SQLite file, including a real OS-process SIGKILL crash test |
 | Wave 12 | qa-02/03/06/07/09 | ✅ Integrated (`a91c239`) — completes **qa** entirely; the literal vertical-slice E2E demo runs real code end-to-end. Final report: no P0s, one open P1 (provider-event-to-node-completion wiring), fully documented |
-| Final | contract-integrator-final (Stage 5) | 🔄 In progress — `go test ./... -race` + cross-role contradiction review; last gate |
+| Final | contract-integrator-final (Stage 5) | ✅ Integrated (`3b6cfcb` + doc commit) — found and closed the composition gap the gate exists to catch: `cmd/preflight/main.go` was never wired to real services. See `contract-integrator.md`'s Stage 5 section |
 
 Wave 5 onward is intentionally not fixed in detail — each wave is
 re-derived from the DAG's actual dependency edges once the prior wave
