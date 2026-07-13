@@ -9,26 +9,26 @@ gracefully pause, or block that turn.
 It answers a different question than checkpoint/resume/memory tools do:
 not "how do we continue?" but **"should we even start this turn?"**
 
-> **Project status: vertical slice complete (85/85 DAG nodes, Final gate passed).**
-> Bootstrap (Stage-0 contract freeze), Waves 1-12, and the Final
-> integration gate (`contract-integrator-final`, Stage 5,
-> [#2](https://github.com/huaiche94/preflight/issues/2), closed) are all
-> integrated on `main`. Every feature role completed its entire DAG scope,
-> and the Final gate's own cross-role contradiction review found and
-> closed the one real gap it exists to catch: `cmd/preflight/main.go` was
-> still a stub, and two of five frozen service ports (plus predictor's
-> `DataSource` seam) had never been assembled into real implementations —
-> every individual piece was correct and tested, but the actual binary
-> was never wired to any of it. Closed via three routed corrective
-> additions plus the lead's own reserved root-composition work; see
-> `docs/implementation/vertical-slice/contract-integrator.md`'s "Stage 5"
-> section for the full report. One P1 remains open (no production adapter
-> yet connects a persisted provider event to Progress Tree node
-> completion — [#1](https://github.com/huaiche94/preflight/issues/1)),
-> plus a groomed backlog of post-slice follow-ups
-> ([#3](https://github.com/huaiche94/preflight/issues/3)-[#16](https://github.com/huaiche94/preflight/issues/16)).
-> See the [Wave roadmap](#wave-roadmap) below and
-> `docs/implementation/vertical-slice/EXECUTION_DAG.md` for task-level status.
+> **Project status: vertical slice complete (85/85 DAG nodes, Final gate
+> passed); post-slice backlog largely executed.** Bootstrap, Waves 1-12,
+> and the Final integration gate are integrated on `main` (see
+> `docs/implementation/vertical-slice/contract-integrator.md` §Stage 5
+> for the gate report). The 2026-07-13 issue-triage session then closed
+> the former P1 ([#1](https://github.com/huaiche94/preflight/issues/1):
+> event correlation + explicit `progress complete`), landed the
+> per-prompt forecast surface with the ADR-043 cost model
+> ([#14](https://github.com/huaiche94/preflight/issues/14)), froze the
+> feature-lookup port (ADR-044,
+> [#4](https://github.com/huaiche94/preflight/issues/4)), and turned on
+> dogfooding — this repo's own Claude Code sessions now feed telemetry
+> into a local Preflight
+> ([#12](https://github.com/huaiche94/preflight/issues/12)), which
+> immediately found
+> [#17](https://github.com/huaiche94/preflight/issues/17) (session
+> bootstrap missing in native hook mode — the current gate for the
+> forecast card rendering in real sessions). Open roadmap:
+> [#6](https://github.com/huaiche94/preflight/issues/6)-[#11](https://github.com/huaiche94/preflight/issues/11),
+> [#13](https://github.com/huaiche94/preflight/issues/13), #17.
 > Milestone gating per `Preflight_ADD.md` §31 still applies.
 
 ## Source of truth
@@ -94,30 +94,35 @@ checkpoint first, or block), and the hook stays provider-compatible even
 on internal failure. Beyond that, the human or the agent can invoke:
 
 ```text
-preflight evaluate               estimate the current turn before running it
+preflight evaluate               estimate a prompt before running it (--prompt-file|-, --json;
+                                 prints the forecast card: scope/tokens/cost/risk/action)
 preflight decision allow|deny    consume a one-time authorization (replays are rejected)
 preflight checkpoint create      State Checkpoint + Repository Checkpoint (never mutates the active branch)
+preflight progress complete      evidence-carrying node completion (--node, --idempotency-key,
+                                 --artifact kind=path; validator-gated per Constitution §6)
 preflight pause request|cancel   safe-point pause with a durable wake job
 preflight resume                 re-verified resume (repo/quota/session/authorization re-checked first)
 preflight scheduler run-once     execute due wake jobs (daemon-run automation: #7)
 preflight status | doctor        session/checkpoint/pause state; environment health
 preflight hook claude <event>    the four hook entrypoints Claude Code calls
-                                 (user-prompt-submit, stop, stop-failure, statusline)
+                                 (user-prompt-submit, stop, stop-failure, statusline;
+                                 statusline --emit-line also renders the status bar text)
 ```
 
 ### Known limits today
 
-- Provider events don't yet drive Progress Tree completion in production
-  wiring ([#1](https://github.com/huaiche94/preflight/issues/1), the one
-  open P1).
+- Native hook mode doesn't yet create repository/worktree/session rows,
+  so the evaluation pipeline (and the #14 forecast card) silently
+  cold-starts in real sessions until
+  [#17](https://github.com/huaiche94/preflight/issues/17) lands — found
+  by dogfooding on day one.
 - Unattended auto-resume needs the M6 daemon
   ([#7](https://github.com/huaiche94/preflight/issues/7)); until then
   wake jobs fire via `scheduler run-once`.
-- A richer in-session forecast card (tokens/cost/scope per prompt) is
-  tracked in [#14](https://github.com/huaiche94/preflight/issues/14), and
-  calibrated probabilities require real telemetry first
-  ([#11](https://github.com/huaiche94/preflight/issues/11),
-  [#12](https://github.com/huaiche94/preflight/issues/12)).
+- All forecasts are uncalibrated scores/ranges; calibrated probabilities
+  require accumulated real telemetry
+  ([#11](https://github.com/huaiche94/preflight/issues/11)) — now
+  flowing via dogfooding.
 
 ## How to use this repo
 
