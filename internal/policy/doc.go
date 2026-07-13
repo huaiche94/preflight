@@ -57,6 +57,23 @@
 // reason code is always emergency_threshold, never a hit-probability
 // percentage.
 //
+// # Context-utilization thresholds (ADR-043 increment 2, D-08)
+//
+// A third rule family, added by ADR-043's context-window promotion and
+// owner decision D-08, overlays the result of priorities 3-8 (never
+// priorities 1-2, which return first): when the Stage-3 quota forecast's
+// projected P90 context utilization exists AND meets the confidence bar
+// (Confidence at least medium, no PREDICTION_COLD_START flag), strictly
+// above 95% suggests CHECKPOINT_AND_RUN and strictly above 85% suggests
+// WARN — upgrading the already-chosen action only when strictly weaker
+// (never a downgrade), and otherwise merely disclosing the crossed
+// threshold via reason codes. Thresholds are active by default (D-08's
+// factory posture — the context window, unlike the cost budget, is not
+// user-declared and has an objective hard ceiling), adjustable and
+// disable-able via Config. See context.go for the full contract and the
+// Constitution-#2 analysis (a utilization projection is never a
+// probability).
+//
 // # The single load-bearing invariant (Constitution §6/§7)
 //
 // Per the DAG's own risk note on this node ("High — must never label an

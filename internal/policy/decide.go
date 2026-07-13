@@ -53,7 +53,14 @@ type Decision struct {
 
 	// ReasonCodes are the frozen ADD §16.4 enum reason codes propagated
 	// from the upstream RiskCombiner components (CombineRiskResult's own
-	// ReasonCodes fields) that are relevant to Action.
+	// ReasonCodes fields) that are relevant to Action, plus — since
+	// ADR-043 increment 2 (D-08) — the additive
+	// CONTEXT_WARN_THRESHOLD_EXCEEDED /
+	// CONTEXT_CHECKPOINT_THRESHOLD_EXCEEDED codes whenever the
+	// context-utilization threshold rule fired (context.go), including
+	// when a stronger gate's action absorbed the rule's suggested action
+	// (the code then discloses the crossed threshold without having
+	// determined the action).
 	ReasonCodes []domain.ReasonCode
 
 	// PolicyReasonCodes are this package's own plain-string reason codes
@@ -101,6 +108,23 @@ type DecideRequest struct {
 	// consumed directly per ADR-041 — never derived from Risk.
 	Runway domain.RunwayForecast
 
+	// Quota is the Stage-3 quota/context forecast
+	// (app.QuotaForecaster's domain.QuotaForecast output), consumed by
+	// the ADR-043 increment-2 / D-08 context-utilization threshold rule
+	// (context.go) — the context window promoted to a policy-active
+	// resource. An ADDITIVE field on this package-local request type
+	// (the frozen app ports are untouched, per ADR-043's "contract
+	// impact is additive"): the zero value carries a nil
+	// ProjectedContextUsedP90, which the context rule treats as "no
+	// projection — stay silent," so every pre-existing caller keeps
+	// exactly its previous behavior. Note this does NOT re-route the
+	// pipeline: RiskCombiner still consumes the same forecast for its
+	// quota/context risk terms (ADD §16.2); policy additionally sees the
+	// raw projection because D-08's thresholds are defined on the
+	// projected utilization percentage itself, not on the sigmoid risk
+	// expression of it.
+	Quota domain.QuotaForecast
+
 	// ExplicitDeny signals an external explicit deny/security decision
 	// (ADD §17.3 priority 1) that this package did not itself compute
 	// (out of this package's boundary — detecting a security policy deny
@@ -144,24 +168,53 @@ type DecideRequest struct {
 }
 
 // Config carries Decide's configurable thresholds so a deployment can
-// tune sensitivity without recompiling. All fields default to the ADD's
-// own documented day-one values via DefaultConfig.
+// tune sensitivity without recompiling. All fields default to their
+// documented day-one values via DefaultConfig; a zero-value Config is
+// always normalized to those defaults, so "defaults active out of the
+// box" (D-08) holds for every caller that never touches Config.
 type Config struct {
 	// RunwayHitProbabilityThreshold is ADD §17.4's calibrated
 	// hit-probability auto-pause gate (default 0.80).
 	RunwayHitProbabilityThreshold float64
+
+	// ContextP90WarnThresholdPercent / ContextP90CheckpointThresholdPercent
+	// are the D-08 context-utilization thresholds (ADR-043 increment 2;
+	// context.go): projected P90 context utilization strictly above the
+	// warn threshold suggests WARN, strictly above the checkpoint
+	// threshold suggests CHECKPOINT_AND_RUN. Zero/negative values
+	// normalize to the documented defaults (85 / 95); to effectively
+	// raise a threshold out of reach, set it above 100, or disable the
+	// rule wholesale via DisableContextUtilizationThresholds.
+	ContextP90WarnThresholdPercent       float64
+	ContextP90CheckpointThresholdPercent float64
+
+	// DisableContextUtilizationThresholds turns the D-08 context rule
+	// off entirely (D-08: "config 可關可調" — and its recorded fallback
+	// if false positives exceed expectations: "降級為惰性是一行 config
+	// 預設值的事"). The zero value is false: thresholds ship ACTIVE, per
+	// the owner-approved decision.
+	DisableContextUtilizationThresholds bool
 }
 
-// DefaultConfig returns the ADD-literal day-one threshold set.
+// DefaultConfig returns the documented day-one threshold set (ADD §17.4's
+// runway gate plus D-08's context-utilization thresholds).
 func DefaultConfig() Config {
 	return Config{
-		RunwayHitProbabilityThreshold: DefaultRunwayHitProbabilityThreshold,
+		RunwayHitProbabilityThreshold:        DefaultRunwayHitProbabilityThreshold,
+		ContextP90WarnThresholdPercent:       DefaultContextP90WarnThresholdPercent,
+		ContextP90CheckpointThresholdPercent: DefaultContextP90CheckpointThresholdPercent,
 	}
 }
 
 func (c Config) normalized() Config {
 	if c.RunwayHitProbabilityThreshold <= 0 {
 		c.RunwayHitProbabilityThreshold = DefaultRunwayHitProbabilityThreshold
+	}
+	if c.ContextP90WarnThresholdPercent <= 0 {
+		c.ContextP90WarnThresholdPercent = DefaultContextP90WarnThresholdPercent
+	}
+	if c.ContextP90CheckpointThresholdPercent <= 0 {
+		c.ContextP90CheckpointThresholdPercent = DefaultContextP90CheckpointThresholdPercent
 	}
 	return c
 }
@@ -214,30 +267,45 @@ func (d *Decider) Decide(req DecideRequest) Decision {
 		}
 	}
 
-	// Priority 3: active graceful-pause trigger (calibrated debounced
-	// runway hit-probability, or an uncalibrated emergency condition).
-	if pause, ok := runwayPauseDecision(req.Runway, cfg, req.PriorRunwayHitConfirmed); ok {
-		return pause
-	}
-
-	// Priority 4: mandatory state checkpoint boundary, independent of
-	// risk score.
-	if req.MandatoryCheckpointBoundary {
-		overall := req.Risk.OverallRisk
-		return Decision{
-			Action:            app.PolicyCheckpointAndRun,
-			Calibrated:        overall.Calibrated,
-			Confidence:        overall.Confidence,
-			RiskScore:         clamp01Risk(overall.Score),
-			Probability:       nil, // mandatory boundary is structural, never a probability claim
-			ReasonCodes:       overall.ReasonCodes,
-			PolicyReasonCodes: []string{"mandatory_checkpoint_boundary"},
-			Severity:          "high",
+	// Priorities 3-8 produce the base decision, onto which the ADR-043
+	// increment-2 / D-08 context-utilization threshold rule is overlaid
+	// below. The overlay runs AFTER (not among) these gates because it is
+	// defined relative to them: it may only strengthen whatever they
+	// chose, never weaken it, and a silent overlay (no projection, low
+	// confidence, disabled, below thresholds) leaves the base decision
+	// bit-for-bit unchanged — see context.go's applyContextThresholds.
+	// The two fail-closed gates above (explicit deny, integrity failure)
+	// deliberately return before it: they are definite, non-prediction
+	// facts already at the maximum action, and mixing prediction-flavored
+	// reason codes into them adds noise, not information.
+	base := func() Decision {
+		// Priority 3: active graceful-pause trigger (calibrated debounced
+		// runway hit-probability, or an uncalibrated emergency condition).
+		if pause, ok := runwayPauseDecision(req.Runway, cfg, req.PriorRunwayHitConfirmed); ok {
+			return pause
 		}
-	}
 
-	// Priorities 5-8: risk-band decision (ADD §16.5).
-	return riskBandDecision(req.Risk)
+		// Priority 4: mandatory state checkpoint boundary, independent of
+		// risk score.
+		if req.MandatoryCheckpointBoundary {
+			overall := req.Risk.OverallRisk
+			return Decision{
+				Action:            app.PolicyCheckpointAndRun,
+				Calibrated:        overall.Calibrated,
+				Confidence:        overall.Confidence,
+				RiskScore:         clamp01Risk(overall.Score),
+				Probability:       nil, // mandatory boundary is structural, never a probability claim
+				ReasonCodes:       overall.ReasonCodes,
+				PolicyReasonCodes: []string{"mandatory_checkpoint_boundary"},
+				Severity:          "high",
+			}
+		}
+
+		// Priorities 5-8: risk-band decision (ADD §16.5).
+		return riskBandDecision(req.Risk)
+	}()
+
+	return applyContextThresholds(base, req, cfg)
 }
 
 // runwayPauseDecision implements ADD §17.3 priority 3 and §17.4's

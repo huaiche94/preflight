@@ -79,3 +79,10 @@ Implemented incrementally on the issue-#14 line: cost forecast first
 (largest user value, no new telemetry needed), context-window promotion
 second, time budget last. Issue #13 tracks this ADR; #14 tracks the
 surface; #11/#12 supply the calibration data.
+
+Increment 2 (context-window promotion) shipped 2026-07-13 per D-08:
+default-active thresholds (projected P90 context >85% WARN / >95%
+CHECKPOINT_AND_RUN, confidence-gated so cold-start projections stay
+silent, adjustable/disable-able via `internal/policy.Config`) in
+`internal/policy/context.go`, with the projection persisted (migration
+0045) and rendered on every forecast-card surface.

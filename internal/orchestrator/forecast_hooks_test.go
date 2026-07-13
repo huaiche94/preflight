@@ -219,6 +219,39 @@ func TestHookHandlers_UserPromptSubmit_EventCarriesEvaluationTurnID(t *testing.T
 	}
 }
 
+// TestHookHandlers_HighContextCardRendersThresholdState (ADR-043
+// increment 2, D-08): a card carrying a persisted context projection with
+// a recorded warn-threshold state renders it on both hook surfaces — the
+// UserPromptSubmit additionalContext block and the statusline emit-line —
+// so the agent and the status bar both see WHY the context resource is
+// policy-active.
+func TestHookHandlers_HighContextCardRendersThresholdState(t *testing.T) {
+	card := testForecastCard()
+	proj := 91.0
+	card.ContextProjectedP90 = &proj
+	card.ContextWarnThresholdExceeded = true
+
+	deps := baseHookDeps()
+	deps.Evaluation = evaluationServiceFake(app.PolicyWarn)
+	deps.Forecast = &fakeForecastSource{card: card, latestOK: true}
+
+	result, err := orchestrator.HandleUserPromptSubmit(context.Background(), deps, readFixture(t, "userpromptsubmit", "normal.json"))
+	if err != nil {
+		t.Fatalf("HandleUserPromptSubmit: %v", err)
+	}
+	if ac := result.Response.AdditionalContext; !strings.Contains(ac, "context: P90 ~91% of window (projected) — WARN threshold exceeded") {
+		t.Errorf("AdditionalContext missing the context threshold line:\n%s", ac)
+	}
+
+	_, line, err := orchestrator.HandleStatusLineEmitLine(context.Background(), deps, readFixture(t, "statusline", "normal.json"))
+	if err != nil {
+		t.Fatalf("HandleStatusLineEmitLine: %v", err)
+	}
+	if !strings.Contains(line, "ctx P90 ~91% (warn)") {
+		t.Errorf("emit-line = %q, want the ctx segment with the warn marker", line)
+	}
+}
+
 // --- statusline --emit-line ---------------------------------------------
 
 func TestHookHandlers_StatusLineEmitLine_ModelOnlyWhenNoForecast(t *testing.T) {

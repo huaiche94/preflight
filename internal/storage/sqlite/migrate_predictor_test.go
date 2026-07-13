@@ -119,6 +119,8 @@ func TestMigration0040_TablesHaveExpectedColumns(t *testing.T) {
 			"lines_changed_p50", "lines_changed_p90",
 			"quota_risk_score", "context_risk_score", "completion_risk_score", "blast_radius_risk_score",
 			"overall_risk_score", "confidence", "calibrated", "reason_codes_json", "created_at",
+			// 0045 (ADR-043 increment 2): the persisted context projection.
+			"projected_context_used_p90",
 		}},
 		{"runway_forecasts", []string{
 			"id", "session_id", "turn_id", "task_id", "limit_id", "horizon_seconds",

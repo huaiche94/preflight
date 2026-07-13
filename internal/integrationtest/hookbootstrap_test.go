@@ -221,6 +221,76 @@ func TestIssue17_StatusLine_BootstrapsAndPopulatesModel(t *testing.T) {
 	}
 }
 
+// TestADR043_HighContextSession_ProjectionRendersThresholdsStaySilent is
+// ADR-043 increment 2's end-to-end high-context scenario over the REAL
+// production stack (no fakes anywhere in the pipeline): a statusline hook
+// reports the session already at 88% of its context window, and the next
+// UserPromptSubmit's forecast card renders the resulting context
+// projection — while the D-08 thresholds, though ACTIVE by default, stay
+// silent, because the real RuleQuotaForecaster is cold-start/low-
+// confidence and D-08's confidence gate ("cold-start 信心不足不觸發")
+// requires exactly today's decision behavior until projections earn
+// trust. The persisted policy decision is checked directly so "silent"
+// means the reason codes were never emitted, not merely not rendered.
+func TestADR043_HighContextSession_ProjectionRendersThresholdsStaySilent(t *testing.T) {
+	repo := newQA02Repo(t)
+	deps, _, db := buildIssue17Deps(t)
+	ctx := context.Background()
+	const sessionID = "sess-adr043-highctx"
+
+	// 1. A real statusline snapshot carrying high context-window usage —
+	// the production telemetry path that feeds SQLDataSource.Context.
+	statusPayload := []byte(fmt.Sprintf(
+		`{"session_id":%q,"model":{"id":"claude-opus-4-1-20250805","display_name":"Opus 4.1"},"workspace":{"current_dir":%q,"project_dir":%q},"context_window":{"used_percentage":88}}`,
+		sessionID, repo.dir, repo.dir))
+	if _, err := orchestrator.HandleStatusLine(ctx, deps, statusPayload); err != nil {
+		t.Fatalf("HandleStatusLine: %v", err)
+	}
+
+	// 2. The next prompt evaluates against that observation.
+	result, err := orchestrator.HandleUserPromptSubmit(ctx, deps, issue17PromptPayload(sessionID, repo.dir))
+	if err != nil {
+		t.Fatalf("HandleUserPromptSubmit: %v", err)
+	}
+	if !result.Evaluated {
+		t.Fatal("result.Evaluated = false, want a real evaluation")
+	}
+
+	// 3. The card renders the context projection (>= the observed 88%),
+	// with no threshold claim (cold-start gate).
+	ac := result.Response.AdditionalContext
+	if !strings.Contains(ac, "context: P90 ~") {
+		t.Fatalf("AdditionalContext missing the context projection line:\n%s", ac)
+	}
+	if strings.Contains(ac, "threshold exceeded") {
+		t.Errorf("AdditionalContext claims a threshold on a cold-start projection:\n%s", ac)
+	}
+
+	// 4. Persistence-level proof of both halves: the projection column is
+	// populated, and the decision's reason codes carry NO context
+	// threshold code — the D-08 rule really did stay out of the decision.
+	var projected *float64
+	var decisionReasons string
+	if err := db.Conn().QueryRowContext(ctx, `
+		SELECT p.projected_context_used_p90, pd.reason_codes_json
+		FROM predictions p JOIN policy_decisions pd ON pd.prediction_id = p.id
+		ORDER BY p.rowid DESC LIMIT 1`,
+	).Scan(&projected, &decisionReasons); err != nil {
+		t.Fatalf("read persisted projection + decision: %v", err)
+	}
+	if projected == nil || *projected < 88 {
+		t.Errorf("projected_context_used_p90 = %v, want >= the observed 88 (migration 0045)", projected)
+	}
+	for _, code := range []domain.ReasonCode{
+		domain.ReasonContextWarnThresholdExceeded,
+		domain.ReasonContextCheckpointThresholdExceeded,
+	} {
+		if strings.Contains(decisionReasons, string(code)) {
+			t.Errorf("policy_decisions.reason_codes_json = %s, must not carry %s for a cold-start projection (D-08)", decisionReasons, code)
+		}
+	}
+}
+
 // TestIssue17_UserPromptSubmit_NonGitDir_FailsOpenNoRows proves the
 // fail-open half: a session running outside any git repository gets no
 // fabricated rows, no evaluation, and the hook still answers the plain

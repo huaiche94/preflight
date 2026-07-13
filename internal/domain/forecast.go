@@ -35,6 +35,26 @@ const (
 	ReasonRepositoryChangedDuringSleep ReasonCode = "REPOSITORY_CHANGED_DURING_SLEEP"
 )
 
+// Context-utilization threshold reason codes (ADR-043 increment 2,
+// DECISION_LOG.md D-08). These two values are an ADDITIVE extension to the
+// original ADD §16.4 list above, sanctioned by ADR-043's "contract impact
+// is additive" rule and recorded in CONTRACT_FREEZE.md's Amendments
+// section: they are emitted by internal/policy when the projected P90
+// context-window utilization (domain.QuotaForecast.ProjectedContextUsedP90)
+// crosses D-08's factory-default WARN (>85%) / CHECKPOINT_AND_RUN (>95%)
+// thresholds, so the forecast card and `auspex evaluate` can say WHY a
+// context-driven action was taken. Two distinct codes (not one) because a
+// stronger already-chosen action can absorb the threshold's action while
+// the reason code alone must still convey which tier fired. They describe
+// a threshold comparison on a projected utilization percentage — never a
+// probability claim (Constitution principle #2); a decision citing them
+// always carries probability: null unless some OTHER calibrated input
+// independently justified one.
+const (
+	ReasonContextWarnThresholdExceeded       ReasonCode = "CONTEXT_WARN_THRESHOLD_EXCEEDED"
+	ReasonContextCheckpointThresholdExceeded ReasonCode = "CONTEXT_CHECKPOINT_THRESHOLD_EXCEEDED"
+)
+
 // ScopeEstimate is the Predictor pipeline's Stage 1 output: what work a
 // turn is expected to require, not how many tokens it will cost (ADD §14.1).
 //

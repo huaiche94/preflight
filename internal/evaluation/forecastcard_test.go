@@ -213,16 +213,18 @@ func insertTurnStartedEvent(t *testing.T, db *sqlite.DB, eventID string, session
 
 // --- presenter rendering -----------------------------------------------
 
-// TestAdditionalContext_FullCard: the hook-injected block is compact (6
-// lines), carries the uncalibrated labeling verbatim, and cites the
-// numbers plus the policy action.
+// TestAdditionalContext_FullCard: the hook-injected block is compact (7
+// lines — issue #14's ~6-line budget plus ADR-043 increment 2's context
+// line), carries the uncalibrated labeling verbatim, and cites the
+// numbers, the context projection with its D-08 threshold state, and the
+// policy action.
 func TestAdditionalContext_FullCard(t *testing.T) {
 	card := fullTestCard()
 	got := card.AdditionalContext()
 
 	lines := strings.Split(got, "\n")
-	if len(lines) != 6 {
-		t.Errorf("AdditionalContext has %d lines, want exactly 6 (issue #14: ~6 lines max):\n%s", len(lines), got)
+	if len(lines) != 7 {
+		t.Errorf("AdditionalContext has %d lines, want exactly 7 (issue #14's ~6-line budget + the ADR-043 increment-2 context line):\n%s", len(lines), got)
 	}
 	for _, want := range []string{
 		"uncalibrated estimate",
@@ -233,6 +235,7 @@ func TestAdditionalContext_FullCard(t *testing.T) {
 		"P50 8000 / P80 20000 / P90 45000",
 		"~$0.02–$0.68 USD",
 		"estimate",
+		"context: P90 ~91% of window (projected) — WARN threshold exceeded", // ADR-043 increment 2 / D-08
 		"0.42/1.00 overall",
 		"LARGE_FILE_SCOPE",
 		"policy: WARN",
@@ -240,6 +243,29 @@ func TestAdditionalContext_FullCard(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("AdditionalContext missing %q:\n%s", want, got)
 		}
+	}
+}
+
+// TestAdditionalContext_ContextThresholdStates: the context line's D-08
+// threshold marker is read back from the card's persisted flags — a
+// projection above 85% with NO recorded threshold decision (cold-start
+// gated, or disabled) renders the percentage without a threshold claim,
+// and the checkpoint marker outranks the warn marker.
+func TestAdditionalContext_ContextThresholdStates(t *testing.T) {
+	card := fullTestCard()
+
+	card.ContextWarnThresholdExceeded = false
+	card.ContextCheckpointThresholdExceeded = false
+	if got := card.AdditionalContext(); !strings.Contains(got, "context: P90 ~91% of window (projected)") ||
+		strings.Contains(got, "threshold exceeded") {
+		t.Errorf("gated projection must render without a threshold claim:\n%s", got)
+	}
+
+	card.ContextProjectedP90 = ptrF64(97)
+	card.ContextWarnThresholdExceeded = true
+	card.ContextCheckpointThresholdExceeded = true
+	if got := card.AdditionalContext(); !strings.Contains(got, "context: P90 ~97% of window (projected) — CHECKPOINT threshold exceeded") {
+		t.Errorf("checkpoint marker should outrank warn:\n%s", got)
 	}
 }
 
@@ -254,13 +280,14 @@ func TestAdditionalContext_ColdStartDegradation(t *testing.T) {
 	}
 	got := card.AdditionalContext()
 
-	if lines := strings.Split(got, "\n"); len(lines) != 6 {
-		t.Errorf("cold-start AdditionalContext has %d lines, want 6:\n%s", len(lines), got)
+	if lines := strings.Split(got, "\n"); len(lines) != 7 {
+		t.Errorf("cold-start AdditionalContext has %d lines, want 7:\n%s", len(lines), got)
 	}
 	for _, want := range []string{
 		"scope: unknown (cold start)",
 		"tokens: unknown (cold start)",
 		"cost: unavailable (no token forecast)",
+		"context: unknown (cold start)", // nil projection is an explicit unknown, never 0% (ADD principle 1)
 		"uncalibrated estimate",
 		"policy: RUN",
 	} {
@@ -295,6 +322,15 @@ func TestAdditionalContext_ReasonCodesCapped(t *testing.T) {
 func TestStatusLineText(t *testing.T) {
 	card := fullTestCard()
 
+	// A card whose projection carries no threshold decision renders the
+	// percentage without a threshold marker; the checkpoint marker
+	// outranks warn.
+	noThresholdCard := fullTestCard()
+	noThresholdCard.ContextWarnThresholdExceeded = false
+	checkpointCard := fullTestCard()
+	checkpointCard.ContextProjectedP90 = ptrF64(97)
+	checkpointCard.ContextCheckpointThresholdExceeded = true
+
 	cases := []struct {
 		name  string
 		model string
@@ -303,7 +339,9 @@ func TestStatusLineText(t *testing.T) {
 	}{
 		{"no model no card", "", nil, "pf✈"},
 		{"model only", "Opus 4.1", nil, "pf✈ Opus 4.1"},
-		{"full", "Opus 4.1", &card, "pf✈ Opus 4.1 | est P50 8000tok ~$0.02–0.68 | WARN"},
+		{"full", "Opus 4.1", &card, "pf✈ Opus 4.1 | est P50 8000tok ~$0.02–0.68 | ctx P90 ~91% (warn) | WARN"},
+		{"context without threshold decision", "Opus 4.1", &noThresholdCard, "pf✈ Opus 4.1 | est P50 8000tok ~$0.02–0.68 | ctx P90 ~91% | WARN"},
+		{"checkpoint marker outranks warn", "Opus 4.1", &checkpointCard, "pf✈ Opus 4.1 | est P50 8000tok ~$0.02–0.68 | ctx P90 ~97% (checkpoint) | WARN"},
 	}
 	for _, tc := range cases {
 		if got := evaluation.StatusLineText(tc.model, tc.card); got != tc.want {
@@ -312,7 +350,8 @@ func TestStatusLineText(t *testing.T) {
 	}
 
 	// A card without a token forecast contributes only its action —
-	// never "P50 0tok".
+	// never "P50 0tok", and an unknown context projection contributes no
+	// "ctx ~0%" segment either (unknown is not zero).
 	coldCard := evaluation.ForecastCard{PolicyAction: app.PolicyRun}
 	if got, want := evaluation.StatusLineText("Sonnet 4", &coldCard), "pf✈ Sonnet 4 | RUN"; got != want {
 		t.Errorf("cold card: StatusLineText = %q, want %q", got, want)
@@ -320,7 +359,8 @@ func TestStatusLineText(t *testing.T) {
 }
 
 // fullTestCard builds a fully-populated card with round numbers so the
-// rendered output is predictable.
+// rendered output is predictable, including the ADR-043 increment-2
+// context projection with a recorded D-08 warn-threshold state.
 func fullTestCard() evaluation.ForecastCard {
 	return evaluation.ForecastCard{
 		EvaluationID:    "eval-1",
@@ -333,11 +373,13 @@ func fullTestCard() evaluation.ForecastCard {
 			LowUSD: 0.024, HighUSD: 0.675,
 			ModelFamily: pricing.DefaultFamily, Source: pricing.SourceDefaultTable,
 		},
-		OverallRiskScore: 0.42,
-		ReasonCodes:      []domain.ReasonCode{domain.ReasonLargeFileScope, domain.ReasonPredictionColdStart},
-		Confidence:       domain.ConfidenceLow,
-		Calibrated:       false,
-		PolicyAction:     app.PolicyWarn,
+		ContextProjectedP90:          ptrF64(91),
+		ContextWarnThresholdExceeded: true,
+		OverallRiskScore:             0.42,
+		ReasonCodes:                  []domain.ReasonCode{domain.ReasonLargeFileScope, domain.ReasonPredictionColdStart},
+		Confidence:                   domain.ConfidenceLow,
+		Calibrated:                   false,
+		PolicyAction:                 app.PolicyWarn,
 	}
 }
 

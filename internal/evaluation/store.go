@@ -62,7 +62,9 @@ func insertFeatureVector(ctx context.Context, db *sqlite.DB, r featureVectorRow)
 	return nil
 }
 
-// predictionRow mirrors migrations/0041_predictions.sql exactly.
+// predictionRow mirrors migrations/0041_predictions.sql exactly, plus
+// 0045's additive projected_context_used_p90 column (ADR-043 increment 2:
+// the persisted context projection the forecast card reads back).
 type predictionRow struct {
 	ID                   domain.EvaluationID
 	TurnID               domain.TurnID
@@ -83,10 +85,14 @@ type predictionRow struct {
 	CompletionRiskScore  float64
 	BlastRadiusRiskScore float64
 	OverallRiskScore     float64
-	Confidence           domain.Confidence
-	Calibrated           bool
-	ReasonCodesJSON      string
-	CreatedAt            string
+	// ProjectedContextUsedP90 is domain.QuotaForecast's context
+	// projection (percent, 0-100), nil when the forecaster had no usable
+	// context observation (unknown is not zero — migration 0045).
+	ProjectedContextUsedP90 *float64
+	Confidence              domain.Confidence
+	Calibrated              bool
+	ReasonCodesJSON         string
+	CreatedAt               string
 }
 
 func insertPrediction(ctx context.Context, db *sqlite.DB, r predictionRow) error {
@@ -100,8 +106,9 @@ func insertPrediction(ctx context.Context, db *sqlite.DB, r predictionRow) error
 			lines_changed_p50, lines_changed_p90,
 			quota_risk_score, context_risk_score, completion_risk_score,
 			blast_radius_risk_score, overall_risk_score,
+			projected_context_used_p90,
 			confidence, calibrated, reason_codes_json, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		string(r.ID), string(r.TurnID), r.PredictorID, r.PredictorVersion, r.FeatureSetVersion,
 		nullableInt64(r.TokenP50), nullableInt64(r.TokenP80), nullableInt64(r.TokenP90),
 		nullableInt64(r.FilesReadP50), nullableInt64(r.FilesReadP90),
@@ -109,6 +116,7 @@ func insertPrediction(ctx context.Context, db *sqlite.DB, r predictionRow) error
 		nullableInt64(r.LinesChangedP50), nullableInt64(r.LinesChangedP90),
 		r.QuotaRiskScore, r.ContextRiskScore, r.CompletionRiskScore,
 		r.BlastRadiusRiskScore, r.OverallRiskScore,
+		nullableFloat64(r.ProjectedContextUsedP90),
 		string(r.Confidence), boolToInt(r.Calibrated), r.ReasonCodesJSON, r.CreatedAt,
 	)
 	if err != nil {
@@ -127,6 +135,7 @@ func getPrediction(ctx context.Context, db *sqlite.DB, id domain.EvaluationID) (
 		       lines_changed_p50, lines_changed_p90,
 		       quota_risk_score, context_risk_score, completion_risk_score,
 		       blast_radius_risk_score, overall_risk_score,
+		       projected_context_used_p90,
 		       confidence, calibrated, reason_codes_json, created_at
 		FROM predictions WHERE id = ?`, string(id))
 	r, err := scanPrediction(row)
@@ -149,6 +158,7 @@ func scanPrediction(row interface{ Scan(dest ...any) error }) (predictionRow, er
 		filesReadP50, filesReadP90                      sql.NullInt64
 		filesChangedP50, filesChangedP90                sql.NullInt64
 		linesChangedP50, linesChangedP90                sql.NullInt64
+		projectedContextUsedP90                         sql.NullFloat64
 	)
 	if err := row.Scan(
 		&id, &turnID, &predID, &predVersion, &featureVersion,
@@ -158,6 +168,7 @@ func scanPrediction(row interface{ Scan(dest ...any) error }) (predictionRow, er
 		&linesChangedP50, &linesChangedP90,
 		&r.QuotaRiskScore, &r.ContextRiskScore, &r.CompletionRiskScore,
 		&r.BlastRadiusRiskScore, &r.OverallRiskScore,
+		&projectedContextUsedP90,
 		&confidence, &calibrated, &reasonCodesJSON, &createdAt,
 	); err != nil {
 		return predictionRow{}, err
@@ -176,6 +187,7 @@ func scanPrediction(row interface{ Scan(dest ...any) error }) (predictionRow, er
 	r.FilesChangedP90 = nullInt64Ptr(filesChangedP90)
 	r.LinesChangedP50 = nullInt64Ptr(linesChangedP50)
 	r.LinesChangedP90 = nullInt64Ptr(linesChangedP90)
+	r.ProjectedContextUsedP90 = nullFloat64Ptr(projectedContextUsedP90)
 	r.Confidence = domain.Confidence(confidence)
 	r.Calibrated = calibrated != 0
 	r.ReasonCodesJSON = reasonCodesJSON
@@ -375,6 +387,21 @@ func nullInt64Ptr(v sql.NullInt64) *int64 {
 		return nil
 	}
 	x := v.Int64
+	return &x
+}
+
+func nullableFloat64(v *float64) sql.NullFloat64 {
+	if v == nil {
+		return sql.NullFloat64{}
+	}
+	return sql.NullFloat64{Float64: *v, Valid: true}
+}
+
+func nullFloat64Ptr(v sql.NullFloat64) *float64 {
+	if !v.Valid {
+		return nil
+	}
+	x := v.Float64
 	return &x
 }
 

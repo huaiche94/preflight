@@ -109,7 +109,7 @@ flowchart TD
 
 - **選項：** ①**Lazy：hook 自動登記（✅）**——idempotent upsert、fail-open、零使用者摩擦；缺點是 hook 多一次 git 呼叫、本機 DB 存 repo 絕對路徑（local-first 可接受）；②顯式 `auspex init`——可預期但多安裝摩擦、忘記 init 就永遠沒預估卡；③兩者都做——工作量最大。
 - **既定約束（無選項）：** 非 git 目錄的 session 因 schema 外鍵一律降級為現狀。
-- **後果：** 實作進行中（本條目在 merge 後補 commit SHA）。
+- **後果：** 已落地（commit `fdeb61f`，#17 關閉）：`SessionBootstrapper` 接進全部四個 hook handlers，零預置資料的端到端驗收通過——真實 git repo + production deps 下 Resolve 成功、預估卡出現在 additionalContext。無需新 migration（既有 unique constraints 足夠）。
 
 ## D-08 — Context window 升格後的出廠預設（issue #13 增量 2）
 

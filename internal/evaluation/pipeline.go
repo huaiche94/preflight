@@ -92,6 +92,17 @@ func (s *Service) runPipeline(ctx context.Context, req app.EvaluateTurnRequest) 
 		Risk:                    riskResult,
 		Runway:                  runwayForecast,
 		PriorRunwayHitConfirmed: priorConfirmed,
+		// Quota feeds the ADR-043 increment-2 / D-08 context-utilization
+		// threshold rule (policy/context.go): policy sees the raw
+		// projected context P90 directly, because D-08's thresholds are
+		// defined on the utilization percentage itself, not on the
+		// sigmoid risk term RiskCombiner derives from the same forecast.
+		Quota: quotaForecast,
+		// Config is Service.Policy — the programmatic override seam for
+		// D-08's adjustable/disable-able thresholds; the zero value
+		// normalizes to policy.DefaultConfig() (thresholds active, per
+		// the owner-approved factory posture).
+		Config: s.Policy,
 	})
 
 	classification, promptFeatures, err := s.Source.Classification(ctx, req.SessionID, resolved.TaskID)

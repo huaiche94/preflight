@@ -151,6 +151,64 @@ func TestEvaluate_JSONOutput_SchemaVersionedWithNullProbability(t *testing.T) {
 	if cost["estimate"] != true {
 		t.Errorf("cost.estimate = %v, want true — cost is always labeled an estimate (ADR-043)", cost["estimate"])
 	}
+	// ADR-043 increment 2: the context block is always present alongside
+	// the card, and an unknown projection is an explicit null — never 0,
+	// never an absent key (ADD principle 1).
+	ctxBlock, ok := decoded["context"].(map[string]any)
+	if !ok {
+		t.Fatalf("context = %v, want an object", decoded["context"])
+	}
+	proj, present := ctxBlock["projected_p90_used_percent"]
+	if !present {
+		t.Fatal("context.projected_p90_used_percent key absent — an unknown projection must serialize as an explicit null")
+	}
+	if proj != nil {
+		t.Errorf("context.projected_p90_used_percent = %v, want null for a card without a projection", proj)
+	}
+	if ctxBlock["warn_threshold_exceeded"] != false || ctxBlock["checkpoint_threshold_exceeded"] != false {
+		t.Errorf("threshold flags = %v/%v, want false/false without a recorded threshold decision",
+			ctxBlock["warn_threshold_exceeded"], ctxBlock["checkpoint_threshold_exceeded"])
+	}
+}
+
+// TestEvaluate_JSONOutput_ContextThresholdState (ADR-043 increment 2,
+// D-08): a card carrying a persisted context projection with a recorded
+// checkpoint-threshold state serializes both onto the evaluate JSON
+// surface.
+func TestEvaluate_JSONOutput_ContextThresholdState(t *testing.T) {
+	deps := evaluateTestDeps(nil)
+	card := testCLIForecastCard()
+	proj := 97.0
+	card.ContextProjectedP90 = &proj
+	card.ContextCheckpointThresholdExceeded = true
+	deps.Forecast = &fakeCardSource{card: card}
+
+	root := newTestRoot(cli.NewEvaluateCmd(deps))
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+	root.SetArgs([]string{"evaluate", "--session-id", "sess-1", "--json"})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(out.Bytes()), &decoded); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v (body=%s)", err, out.Bytes())
+	}
+	ctxBlock, ok := decoded["context"].(map[string]any)
+	if !ok {
+		t.Fatalf("context = %v, want an object", decoded["context"])
+	}
+	if ctxBlock["projected_p90_used_percent"] != float64(97) {
+		t.Errorf("context.projected_p90_used_percent = %v, want 97", ctxBlock["projected_p90_used_percent"])
+	}
+	if ctxBlock["checkpoint_threshold_exceeded"] != true {
+		t.Errorf("context.checkpoint_threshold_exceeded = %v, want true", ctxBlock["checkpoint_threshold_exceeded"])
+	}
+	if ctxBlock["warn_threshold_exceeded"] != false {
+		t.Errorf("context.warn_threshold_exceeded = %v, want false", ctxBlock["warn_threshold_exceeded"])
+	}
 }
 
 func TestEvaluate_HumanOutput_RendersCard(t *testing.T) {

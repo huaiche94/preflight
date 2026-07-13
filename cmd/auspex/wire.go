@@ -151,6 +151,15 @@ func buildRootCmd(ctx context.Context) (root *cobra.Command, closeFn func() erro
 	riskCombiner := risk.NewRuleRiskCombiner()
 	decider := policy.NewDecider()
 	evaluationService := evaluation.New(db, dataSource, scopeEstimator, tokenForecaster, quotaForecaster, riskCombiner, decider, clk, ids)
+	// evaluationService.Policy is deliberately left zero: policy.Decide
+	// normalizes it to policy.DefaultConfig(), which ships the ADR-043
+	// increment-2 / D-08 context-utilization thresholds ACTIVE
+	// (owner-approved factory posture). Adjusting or disabling them from
+	// the YAML config chain (internal/config) is a documented follow-up —
+	// this composition root does not load internal/config at all yet (no
+	// production consumer of Config.Raw exists), the same recorded gap as
+	// the pricing override above; until then, evaluationService.Policy is
+	// the programmatic seam (see evaluation.Service.Policy's doc comment).
 
 	// --- runtime Part A: Graceful Pause / Scheduler -------------------
 	pauseStore := pause.NewSQLiteStore(db)

@@ -79,6 +79,31 @@ type ForecastCard struct {
 	// (no forecast means no cost estimate, never a fabricated $0).
 	Cost *pricing.CostRange
 
+	// ContextProjectedP90 is the ADR-043 increment-2 context projection
+	// (predictions.projected_context_used_p90, migration 0045): the
+	// Stage-3 forecast's projected P90 context-window utilization in
+	// percent (0-100). nil means the forecaster had no usable context
+	// observation — rendered as an explicit unknown, never 0 (ADD
+	// principle 1). Like every other number on this card, it is an
+	// estimate and inherits the card's uncalibrated labeling.
+	ContextProjectedP90 *float64
+
+	// ContextWarnThresholdExceeded / ContextCheckpointThresholdExceeded
+	// are the persisted D-08 threshold state (DECISION_LOG.md D-08,
+	// ADR-043 increment 2), read back from the policy decision's own
+	// reason codes (policy_decisions.reason_codes_json carrying
+	// CONTEXT_WARN_THRESHOLD_EXCEEDED /
+	// CONTEXT_CHECKPOINT_THRESHOLD_EXCEEDED) — NOT recomputed by
+	// comparing ContextProjectedP90 against threshold constants at
+	// render time. Read-back keeps the card honest: the policy engine
+	// only emits these codes when the projection also met its
+	// confidence bar and the rule was enabled, so a cold-start
+	// projection that happens to sit above 85% renders its percentage
+	// WITHOUT a threshold claim, exactly matching the decision that was
+	// actually made.
+	ContextWarnThresholdExceeded       bool
+	ContextCheckpointThresholdExceeded bool
+
 	// Risk. OverallRiskScore is a 0-1 score — per Constitution principle
 	// #2 it MUST NOT be presented as a probability while Calibrated is
 	// false, and every presenter method below labels it accordingly.
@@ -152,24 +177,41 @@ func (s *Service) ForecastCard(ctx context.Context, id domain.EvaluationID) (For
 	}
 
 	card := ForecastCard{
-		EvaluationID:     row.ID,
-		TurnID:           row.TurnID,
-		CreatedAt:        createdAt,
-		FilesReadP50:     row.FilesReadP50,
-		FilesReadP90:     row.FilesReadP90,
-		FilesChangedP50:  row.FilesChangedP50,
-		FilesChangedP90:  row.FilesChangedP90,
-		LinesChangedP50:  row.LinesChangedP50,
-		LinesChangedP90:  row.LinesChangedP90,
-		TokensP50:        row.TokenP50,
-		TokensP80:        row.TokenP80,
-		TokensP90:        row.TokenP90,
-		OverallRiskScore: row.OverallRiskScore,
-		ReasonCodes:      reasons,
-		Confidence:       row.Confidence,
-		Calibrated:       row.Calibrated,
-		Probability:      nil, // always nil this wave — see the file doc comment (Constitution principle #2)
-		PolicyAction:     app.PolicyAction(decisionRow.Action),
+		EvaluationID:        row.ID,
+		TurnID:              row.TurnID,
+		CreatedAt:           createdAt,
+		FilesReadP50:        row.FilesReadP50,
+		FilesReadP90:        row.FilesReadP90,
+		FilesChangedP50:     row.FilesChangedP50,
+		FilesChangedP90:     row.FilesChangedP90,
+		LinesChangedP50:     row.LinesChangedP50,
+		LinesChangedP90:     row.LinesChangedP90,
+		TokensP50:           row.TokenP50,
+		TokensP80:           row.TokenP80,
+		TokensP90:           row.TokenP90,
+		ContextProjectedP90: row.ProjectedContextUsedP90,
+		OverallRiskScore:    row.OverallRiskScore,
+		ReasonCodes:         reasons,
+		Confidence:          row.Confidence,
+		Calibrated:          row.Calibrated,
+		Probability:         nil, // always nil this wave — see the file doc comment (Constitution principle #2)
+		PolicyAction:        app.PolicyAction(decisionRow.Action),
+	}
+
+	// D-08 threshold state: read back from the persisted policy
+	// decision's reason codes (see the field doc comment for why this is
+	// never recomputed at render time).
+	decisionReasons, err := unmarshalReasonCodes(decisionRow.ReasonCodesJSON)
+	if err != nil {
+		return ForecastCard{}, err
+	}
+	for _, rc := range decisionReasons {
+		switch rc {
+		case domain.ReasonContextWarnThresholdExceeded:
+			card.ContextWarnThresholdExceeded = true
+		case domain.ReasonContextCheckpointThresholdExceeded:
+			card.ContextCheckpointThresholdExceeded = true
+		}
 	}
 
 	if card.TokensP50 != nil && card.TokensP90 != nil {
@@ -242,7 +284,10 @@ const maxContextReasonCodes = 3
 // UserPromptSubmit hook injects as Claude Code additionalContext
 // (hookSpecificOutput.additionalContext) — the surface where the coding
 // agent literally sees the forecast before acting (issue #14 deliverable
-// 3). Always at most 6 lines; missing data renders as an explicit
+// 3). Always at most 7 lines (issue #14's "~6 lines max" budget, plus
+// ADR-043 increment 2's context line — the context window is the one
+// resource whose exhaustion mid-turn is catastrophic, so its projection
+// earns a line of its own); missing data renders as an explicit
 // "unknown (cold start)", never as zero (ADD principle 1).
 func (c ForecastCard) AdditionalContext() string {
 	lines := []string{
@@ -250,6 +295,7 @@ func (c ForecastCard) AdditionalContext() string {
 		"  scope: " + c.scopeText(),
 		"  tokens: " + c.tokensText(),
 		"  cost: " + c.costText(),
+		"  context: " + c.contextText(),
 		fmt.Sprintf("  risk: %.2f/1.00 overall%s", c.OverallRiskScore, c.topReasonsText()),
 		"  policy: " + c.policyText(),
 	}
@@ -259,15 +305,19 @@ func (c ForecastCard) AdditionalContext() string {
 // StatusLineText renders the one-line statusline display (issue #14
 // deliverable 4; resolves issue #12 friction #2's ingest-only gap):
 //
-//	pf✈ <model> | est P50 <tokens>tok ~$<low>–<high> | <policy action>
+//	pf✈ <model> | est P50 <tokens>tok ~$<low>–<high> | ctx P90 ~<pct>% | <policy action>
 //
 // model may be empty (renders as bare "pf✈") and card may be nil (no
 // persisted evaluation for the session yet — renders model only), so the
 // status bar always has something to show; "est"/"~" mark every number as
 // an estimate, and the full uncalibrated labeling lives on the card
 // surfaces where there is room for it (AdditionalContext, `auspex
-// evaluate`). Exported as a package function rather than a method so the
-// nil-card fallback is one code path, not caller-side duplication.
+// evaluate`). The ctx segment (ADR-043 increment 2) appears only when a
+// context projection was persisted — an unknown projection contributes
+// nothing rather than a fabricated 0% — and carries the D-08 threshold
+// state ("(warn)"/"(checkpoint)") when the policy engine recorded one.
+// Exported as a package function rather than a method so the nil-card
+// fallback is one code path, not caller-side duplication.
 func StatusLineText(model string, card *ForecastCard) string {
 	head := "pf✈"
 	if model != "" {
@@ -279,6 +329,16 @@ func StatusLineText(model string, card *ForecastCard) string {
 			seg := fmt.Sprintf("est P50 %dtok", *card.TokensP50)
 			if card.Cost != nil {
 				seg += fmt.Sprintf(" ~$%.2f–%.2f", card.Cost.LowUSD, card.Cost.HighUSD)
+			}
+			parts = append(parts, seg)
+		}
+		if card.ContextProjectedP90 != nil {
+			seg := fmt.Sprintf("ctx P90 ~%.0f%%", *card.ContextProjectedP90)
+			switch {
+			case card.ContextCheckpointThresholdExceeded:
+				seg += " (checkpoint)"
+			case card.ContextWarnThresholdExceeded:
+				seg += " (warn)"
 			}
 			parts = append(parts, seg)
 		}
@@ -340,6 +400,29 @@ func (c ForecastCard) costText() string {
 	}
 	return fmt.Sprintf("~$%.2f–$%.2f USD (%s pricing, %s; estimate)",
 		c.Cost.LowUSD, c.Cost.HighUSD, c.Cost.ModelFamily, c.Cost.Source)
+}
+
+// contextText renders the ADR-043 increment-2 context-window line: the
+// projected P90 utilization percentage plus, when the policy engine
+// actually recorded one (see the ContextWarnThresholdExceeded field doc),
+// the D-08 threshold state — e.g. "P90 ~91% of window (projected) — WARN
+// threshold exceeded". A projection with no threshold marker means the
+// thresholds did not fire for this decision (below both, gated by
+// cold-start/low confidence, or disabled) — the "~" and the card-level
+// uncalibrated label keep the number an estimate, never a measurement or
+// a probability (Constitution principle #2).
+func (c ForecastCard) contextText() string {
+	if c.ContextProjectedP90 == nil {
+		return "unknown (cold start)"
+	}
+	text := fmt.Sprintf("P90 ~%.0f%% of window (projected)", *c.ContextProjectedP90)
+	switch {
+	case c.ContextCheckpointThresholdExceeded:
+		text += " — CHECKPOINT threshold exceeded"
+	case c.ContextWarnThresholdExceeded:
+		text += " — WARN threshold exceeded"
+	}
+	return text
 }
 
 func (c ForecastCard) topReasonsText() string {

@@ -1,0 +1,18 @@
+-- 0045_predictions_context_projection.sql
+--
+-- ADR-043 increment 2 (context-window promotion, DECISION_LOG.md D-08):
+-- persist the Stage-3 quota forecast's projected P90 context-window
+-- utilization (domain.QuotaForecast.ProjectedContextUsedP90, percent
+-- 0-100) on the predictions row, so the read-back forecast surfaces
+-- (evaluation.ForecastCard -> hook additionalContext, statusline,
+-- `auspex evaluate`) can render the context projection and its D-08
+-- threshold state without recomputing the pipeline (forecastcard.go's
+-- "read-back, not recompute" contract).
+--
+-- Nullable by design: a cold-start evaluation with no usable context
+-- observation legitimately has no projection, and NULL means unknown,
+-- never a substituted zero (ADD principle 1; the same rule every other
+-- nullable quantile column in 0041 already follows). Additive ALTER in
+-- predictor's own 0040-0049 migration range — existing rows read back as
+-- NULL/unknown, exactly what was true when they were written.
+ALTER TABLE predictions ADD COLUMN projected_context_used_p90 REAL;

@@ -137,20 +137,21 @@ func readPromptFile(cmd *cobra.Command, promptFile string) (string, error) {
 // `"probability": null` explicitly — the absence of a probability is
 // load-bearing information, not an omittable default.
 type evaluateOutput struct {
-	SchemaVersion string                `json:"schema_version"`
-	EvaluationID  string                `json:"evaluation_id"`
-	TurnID        string                `json:"turn_id"`
-	PolicyAction  string                `json:"policy_action"`
-	Label         string                `json:"label"`
-	Calibrated    bool                  `json:"calibrated"`
-	Probability   *float64              `json:"probability"`
-	Confidence    string                `json:"confidence"`
-	ReasonCodes   []string              `json:"reason_codes"`
-	Scope         *evaluateScopeOutput  `json:"scope,omitempty"`
-	Tokens        *evaluateTokensOutput `json:"tokens,omitempty"`
-	Cost          *evaluateCostOutput   `json:"cost,omitempty"`
-	Risk          *evaluateRiskOutput   `json:"risk,omitempty"`
-	CardAvailable bool                  `json:"card_available"`
+	SchemaVersion string                 `json:"schema_version"`
+	EvaluationID  string                 `json:"evaluation_id"`
+	TurnID        string                 `json:"turn_id"`
+	PolicyAction  string                 `json:"policy_action"`
+	Label         string                 `json:"label"`
+	Calibrated    bool                   `json:"calibrated"`
+	Probability   *float64               `json:"probability"`
+	Confidence    string                 `json:"confidence"`
+	ReasonCodes   []string               `json:"reason_codes"`
+	Scope         *evaluateScopeOutput   `json:"scope,omitempty"`
+	Tokens        *evaluateTokensOutput  `json:"tokens,omitempty"`
+	Cost          *evaluateCostOutput    `json:"cost,omitempty"`
+	Context       *evaluateContextOutput `json:"context,omitempty"`
+	Risk          *evaluateRiskOutput    `json:"risk,omitempty"`
+	CardAvailable bool                   `json:"card_available"`
 }
 
 type evaluateScopeOutput struct {
@@ -178,6 +179,22 @@ type evaluateCostOutput struct {
 
 type evaluateRiskOutput struct {
 	OverallScore float64 `json:"overall_score"`
+}
+
+// evaluateContextOutput is the ADR-043 increment-2 context-window block
+// (DECISION_LOG.md D-08). projected_p90_used_percent has NO omitempty for
+// the same reason probability doesn't: an unknown projection serializes
+// as an explicit null, never 0 or an absent key (ADD principle 1). The
+// two threshold booleans mirror the card's read-back-from-the-decision
+// state (evaluation.ForecastCard.Context*ThresholdExceeded): true only
+// when the policy engine actually recorded the D-08 threshold as crossed
+// for this decision — a cold-start/low-confidence projection above 85%
+// reports its percentage with both flags false, exactly the "thresholds
+// active but confidence-gated" semantics D-08 fixed.
+type evaluateContextOutput struct {
+	ProjectedP90UsedPercent     *float64 `json:"projected_p90_used_percent"`
+	WarnThresholdExceeded       bool     `json:"warn_threshold_exceeded"`
+	CheckpointThresholdExceeded bool     `json:"checkpoint_threshold_exceeded"`
 }
 
 // evaluateUncalibratedLabel is the fixed labeling `--json` output carries
@@ -216,6 +233,11 @@ func buildEvaluateOutput(result orchestrator.EvaluatePromptResult) evaluateOutpu
 		LinesChangedP90: card.LinesChangedP90,
 	}
 	out.Tokens = &evaluateTokensOutput{P50: card.TokensP50, P80: card.TokensP80, P90: card.TokensP90}
+	out.Context = &evaluateContextOutput{
+		ProjectedP90UsedPercent:     card.ContextProjectedP90,
+		WarnThresholdExceeded:       card.ContextWarnThresholdExceeded,
+		CheckpointThresholdExceeded: card.ContextCheckpointThresholdExceeded,
+	}
 	if card.Cost != nil {
 		out.Cost = &evaluateCostOutput{
 			LowUSD:      card.Cost.LowUSD,

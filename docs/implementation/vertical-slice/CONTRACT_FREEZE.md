@@ -153,6 +153,18 @@ Per `agents/contract-integrator.md` "Out of scope": no Claude parser, predictor 
   definition). This closes the "repository/session feature lookup"
   deferral in the section above; the rest of that section still applies.
 
+- **2026-07-13 — ADR-043 increment 2 (D-08): two additive
+  `domain.ReasonCode` values.** `CONTEXT_WARN_THRESHOLD_EXCEEDED` and
+  `CONTEXT_CHECKPOINT_THRESHOLD_EXCEEDED` are added to the ADD-§16.4-backed
+  enum in `internal/domain/forecast.go`, emitted by `internal/policy`'s
+  context-utilization threshold rule (DECISION_LOG.md D-08) so the
+  forecast surfaces can explain a context-driven WARN/CHECKPOINT_AND_RUN.
+  Purely additive: no existing value is renamed, removed, or re-meant;
+  consumers pattern-matching the original list are unaffected. Everything
+  else in this increment stayed outside the frozen surface
+  (package-local `policy.DecideRequest`/`policy.Config` fields, additive
+  migration 0045, presenter-layer card fields).
+
 - **2026-07-13 — ADR-045: product renamed Preflight → Auspex.** Every
   frozen schema-version string is re-prefixed (`preflight.error.v1` →
   `auspex.error.v1`, `preflight.event.v1` → `auspex.event.v1`,

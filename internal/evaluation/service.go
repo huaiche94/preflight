@@ -44,6 +44,26 @@ type Service struct {
 	// every existing construction site keeps working unchanged and a
 	// composition root that wants overridden prices sets this explicitly.
 	Pricing *pricing.Table
+
+	// Policy carries the policy.Decider's threshold configuration for
+	// every Decide call this service makes (runway hit-probability gate,
+	// and — ADR-043 increment 2 / DECISION_LOG.md D-08 — the
+	// context-utilization thresholds, which ship ACTIVE by default).
+	// Optional, following Pricing's exact convention: the zero value
+	// normalizes to policy.DefaultConfig() inside Decide, so every
+	// existing construction site keeps its behavior and D-08's factory
+	// defaults apply out of the box. This field is the documented
+	// programmatic override seam for adjusting or disabling the D-08
+	// thresholds (e.g. Policy: policy.Config{
+	// DisableContextUtilizationThresholds: true }). Wiring it from the
+	// YAML config chain (internal/config) is a deliberate follow-up:
+	// cmd/auspex/wire.go does not load internal/config at all today —
+	// no production consumer of Config.Raw exists yet — and building
+	// that plumbing for one threshold pair would be a config subsystem
+	// grown ahead of need (Constitution §7 rule 10), exactly the same
+	// judgment already recorded for Pricing's config override
+	// (internal/pricing's package comment).
+	Policy policy.Config
 }
 
 var _ app.EvaluationService = (*Service)(nil)
@@ -190,10 +210,16 @@ func (s *Service) EvaluateTurn(ctx context.Context, req app.EvaluateTurnRequest)
 			CompletionRiskScore:  result.risk.CompletionRisk.Score,
 			BlastRadiusRiskScore: result.risk.BlastRadiusRisk.Score,
 			OverallRiskScore:     result.risk.OverallRisk.Score,
-			Confidence:           result.risk.OverallRisk.Confidence,
-			Calibrated:           result.risk.OverallRisk.Calibrated,
-			ReasonCodesJSON:      predictionReasons,
-			CreatedAt:            nowStr,
+			// ADR-043 increment 2: the raw context projection is persisted
+			// alongside its sigmoid risk expression (ContextRiskScore) so
+			// the forecast card can render the actual projected
+			// utilization percentage (migration 0045); nil stays NULL —
+			// unknown is not zero.
+			ProjectedContextUsedP90: result.quotaFC.ProjectedContextUsedP90,
+			Confidence:              result.risk.OverallRisk.Confidence,
+			Calibrated:              result.risk.OverallRisk.Calibrated,
+			ReasonCodesJSON:         predictionReasons,
+			CreatedAt:               nowStr,
 		}); err != nil {
 			return err
 		}
