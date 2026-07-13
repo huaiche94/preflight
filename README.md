@@ -43,6 +43,7 @@ not "how do we continue?" but **"should we even start this turn?"**
 | [`docs/adr/`](docs/adr/) | Accepted Architecture Decision Records — full-detail companions to the short entries in `Auspex_ADD.md` §33. |
 | [`Auspex_Predictor_Design_Supplement.md`](Auspex_Predictor_Design_Supplement.md) | Predictor pipeline design detail (Scope/Token/Quota Forecast, Risk Estimation) — companion to `Auspex_ADD.md` §14-17, formalized by ADR-041. |
 | [`docs/implementation/vertical-slice/`](docs/implementation/vertical-slice/) | Live vertical-slice execution status: `EXECUTION_DAG.md` (task-level DAG, amended by ADR-041), `CONTRACT_FREEZE.md`, per-role progress artifacts, lessons learned, and post-wave analyses. |
+| [`docs/DECISION_LOG.md`](docs/DECISION_LOG.md) | Owner decision log: every decision point with its options, pros/cons, chosen branch, consequences, and reversibility — rendered as a decision tree. Every new owner-level decision MUST be appended here when made. |
 | [`docs/repository_inventory.md`](docs/repository_inventory.md) | Audit of every markdown file in the repo and its authority/status. |
 | [`docs/archive/`](docs/archive/) | Superseded documents, kept for historical reference, not for implementation. |
 
