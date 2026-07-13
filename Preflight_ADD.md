@@ -5789,6 +5789,30 @@ execution DAG 新增 `predictor-05b`（Token Forecaster）、`predictor-05c`
 （Quota Forecaster），並修正 `predictor-07`／`predictor-08`／`predictor-11`
 的 dependency edges。詳見 `docs/adr/0041-predictor-forecast-layer.md`。
 
+## ADR-042 — Patch redaction 不涵蓋檔名與 binary-diff headers（接受的殘餘面）
+
+**Decision：** Repository Checkpoint 的 patch secret redaction 維持只改寫
+`+`/`-` 行內容；檔名與 binary-diff headers 不改寫（patch 的 `git apply
+--check` 有效性是 restore 的前提；威脅模型不同於內容洩漏）。邊界由
+boundary test 釘住。詳見 `docs/adr/0042-patch-redaction-residual-surface.md`。
+
+## ADR-043 — Quota runway 泛化為多資源 forecast
+
+**Decision：** Forecast 層涵蓋四類可耗盡資源——provider quota/rate limit、
+context window、使用者宣告的金錢預算、時間預算——每類輸出同形（P50/P90
+投影、fit 判定、reason codes、DataQuality）。Policy 輸入從 provider 限額
+轉為使用者宣告預算；pause/wake 機制沿用。契約影響為 additive
+（`ResourceForecast` 並列，不動 `QuotaForecast`）。詳見
+`docs/adr/0043-multi-resource-runway.md`。
+
+## ADR-044 — Feature-lookup port 凍結
+
+**Decision：** `internal/evaluation.DataSource` 的形狀原樣升格為凍結 port
+`app.FeatureDataSource`（+`app.ResolvedSession`）；evaluation 改為 alias，
+predictor 端的兩個窄 `FeatureSource` 保留為消費端視圖（interface
+segregation）。關閉 wave2-analysis REC-01。詳見
+`docs/adr/0044-frozen-feature-lookup-port.md`。
+
 ---
 
 # 34. Codex Execution Contract
