@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -109,8 +110,13 @@ func TestDaemon_RunLifecycle(t *testing.T) {
 		t.Fatalf("token file: %v", err)
 	}
 	token := strings.TrimSpace(string(tokenBytes))
-	if fi, err := os.Stat(info.TokenFile); err != nil || fi.Mode().Perm() != 0o600 {
-		t.Errorf("token file mode = %v (err %v), want 0600", fi.Mode().Perm(), err)
+	if runtime.GOOS != "windows" {
+		// POSIX permission bits don't map onto Windows ACLs (0600 reads
+		// back as 0666 there) — same GOOS guard as config/sqlite's
+		// permission tests (issue #24 precedent).
+		if fi, err := os.Stat(info.TokenFile); err != nil || fi.Mode().Perm() != 0o600 {
+			t.Errorf("token file mode = %v (err %v), want 0600", fi.Mode().Perm(), err)
+		}
 	}
 	if !strings.HasPrefix(info.TokenFile, dataDir) {
 		t.Errorf("token file %q not under data dir %q (D-16)", info.TokenFile, dataDir)
