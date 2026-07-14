@@ -1,5 +1,7 @@
 # Wave 3 Recommendation
 
+> 🌐 English | [繁體中文](Wave3_Recommendation.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | Phase | 3.10 — Post Wave 2 Analysis |

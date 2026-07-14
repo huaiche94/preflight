@@ -1,5 +1,7 @@
 # QA
 
+> 🌐 English | [繁體中文](qa.zh-TW.md)
+
 Cross-component QA, Security, Reliability, and CI.
 
 ## Model

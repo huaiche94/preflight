@@ -1,5 +1,7 @@
 # Contract Integrator
 
+> 🌐 English | [繁體中文](contract-integrator.zh-TW.md)
+
 ## Model
 
 Use Fable.
@@ -20,7 +22,7 @@ internal/app/ports.go
 pkg/protocol/v1/**
 docs/adr/**
 docs/implementation/vertical-slice/CONTRACT_FREEZE.md
-Auspex_ADD.md (only when a genuine contradiction requires an ADR)
+docs/design/Auspex_ADD.md (only when a genuine contradiction requires an ADR)
 AGENTS.md
 ```
 

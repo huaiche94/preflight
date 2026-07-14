@@ -1,5 +1,7 @@
 # Runtime
 
+> 🌐 English | [繁體中文](runtime.zh-TW.md)
+
 Consolidates what were previously two separate agent packets — **Graceful
 Pause, Safe Points, and Durable Scheduler** and **Application Orchestration,
 CLI, and Local API** — into one bounded context: everything that drives the

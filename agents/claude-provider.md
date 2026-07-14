@@ -1,5 +1,7 @@
 # Claude Provider
 
+> 🌐 English | [繁體中文](claude-provider.zh-TW.md)
+
 ## Model
 
 Use Fable for hook semantics review; routine parser/fixture work can use a cheaper model.

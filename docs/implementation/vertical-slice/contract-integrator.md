@@ -1,5 +1,7 @@
 # contract-integrator — Progress Artifact
 
+> 🌐 English | [繁體中文](contract-integrator.zh-TW.md)
+
 Executed as the **Bootstrap stage** (lead-only, not a Wave 1 teammate task —
 see `CONSTITUTION.md` pending amendment and repository owner's 2026-07-12
 directive resolving the Wave 1 deadlock).

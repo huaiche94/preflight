@@ -1,5 +1,7 @@
 # Backlog — Provider / Model / Effort as Prediction Inputs
 
+> 🌐 English | [繁體中文](provider-model-effort-features.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | Status | **Backlog / TODO** — recorded, not scheduled into an active wave |

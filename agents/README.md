@@ -1,5 +1,7 @@
 # Agents
 
+> 🌐 English | [繁體中文](README.zh-TW.md)
+
 This directory contains role definitions.
 
 Each file is independent.
@@ -8,7 +10,7 @@ Each role owns a bounded context.
 
 Never modify another role's files.
 
-Refer to `Auspex_ADD.md` for architecture.
+Refer to `docs/design/Auspex_ADD.md` for architecture.
 
 ## Roles
 
@@ -33,13 +35,13 @@ real seam, not a merge into one undifferentiated blob.
 ## Spawning
 
 A packet file is meant to be handed, on its own, to an isolated
-agent/worktree — it does not require the full `Auspex_ADD.md` or
-`Auspex_Parallel_Execution_Plan.md` in context. To start a role:
-give it this file's contents, its assigned `Auspex_ADD.md` chapters, and
+agent/worktree — it does not require the full `docs/design/Auspex_ADD.md` or
+`docs/design/Auspex_Parallel_Execution_Plan.md` in context. To start a role:
+give it this file's contents, its assigned `docs/design/Auspex_ADD.md` chapters, and
 `docs/implementation/vertical-slice/CONTRACT_FREEZE.md` once the contract-integrator
 has produced it.
 
 For overall context (vision, scope boundary, topology, merge order, cut
-list), see `Auspex_Parallel_Execution_Plan.md` at the repository
-root. For architecture, see `Auspex_ADD.md`. For project-wide governance
+list), see `docs/design/Auspex_Parallel_Execution_Plan.md`. For
+architecture, see `docs/design/Auspex_ADD.md`. For project-wide governance
 and precedence rules, see the Auspex Repository Constitution.

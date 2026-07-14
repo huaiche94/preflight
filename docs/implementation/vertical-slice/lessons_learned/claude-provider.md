@@ -1,5 +1,7 @@
 # Lessons Learned — claude-provider (Wave: claude-provider-01/02/03)
 
+> 🌐 English | [繁體中文](claude-provider.zh-TW.md)
+
 | task_id | estimated_complexity | actual_complexity | estimated_files_changed | actual_files_changed | estimated_duration | actual_duration | unexpected_dependencies | unexpected_files | blockers_encountered | token_waste_observations | recommendations_for_auspex |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 

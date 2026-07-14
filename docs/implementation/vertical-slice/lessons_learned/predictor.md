@@ -1,5 +1,7 @@
 # Lessons Learned — predictor (Wave 1: predictor-02, -03, -04)
 
+> 🌐 English | [繁體中文](predictor.zh-TW.md)
+
 | task_id | estimated_complexity | actual_complexity | estimated_files_changed | actual_files_changed | estimated_duration | actual_duration | unexpected_dependencies | unexpected_files | blockers_encountered | token_waste_observations | recommendations_for_auspex |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | predictor-02 | S | S — matched estimate | 3 | 3 (doc.go, prompt.go, prompt_test.go) | not tracked pre-execution (DAG has no duration field) | one continuous pass, no wall-clock instrumentation in this environment | None | `doc.go` (package-level privacy-boundary doc comment) was not separately anticipated as its own file but is small and paired naturally with the first package file in this directory | None | A `gofmt -w` pass was needed after the first draft (struct field alignment); trivial, but confirms `gofmt -l` should run before `go vet`/tests in the validation sequence, not after, so formatting noise doesn't get mixed into functional review | The privacy assertion (Constitution §7 "raw prompt text never crosses this package's exported boundary") is cheap to test exhaustively via reflection (walk every string-kind field + a whole-struct JSON marshal) plus a structural guard against *adding* new string fields later — this pattern is reusable for every other package with a similar raw-input boundary (e.g. any future tool-output redaction code) and should be documented as a standard test pattern, not reinvented per-role |

@@ -1,5 +1,7 @@
 # Support
 
+> 🌐 English | [繁體中文](SUPPORT.zh-TW.md)
+
 Auspex is an early-stage open-source project. Support is
 community-based and best-effort.
 
@@ -11,7 +13,7 @@ community-based and best-effort.
   output of `auspex doctor --json` with anything sensitive removed.
 - **Questions about architecture or contributing** — read
   [`README.md`](README.md), [`CONSTITUTION.md`](CONSTITUTION.md), and
-  [`Auspex_ADD.md`](Auspex_ADD.md) first; then open an issue if the
+  [`docs/design/Auspex_ADD.md`](docs/design/Auspex_ADD.md) first; then open an issue if the
   answer isn't there.
 - **Security vulnerabilities** — do **not** open a public issue. Follow
   [`SECURITY.md`](SECURITY.md).

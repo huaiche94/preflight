@@ -1,5 +1,7 @@
 # Historical Replay Report
 
+> 🌐 English | [繁體中文](Historical_Replay_Report.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | Phase | 3.5 — Post Wave 2 Analysis |

@@ -1,5 +1,7 @@
 # Feature Gap Report
 
+> 🌐 English | [繁體中文](Feature_Gap_Report.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | Phase | 3.7 (companion to `Feature_Registry.md`) |

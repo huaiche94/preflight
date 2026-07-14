@@ -1,5 +1,7 @@
 # Auspex Vertical-Slice Parallel Implementation Plan
 
+> 🌐 English | [繁體中文](Auspex_Parallel_Execution_Plan.zh-TW.md)
+
 ## 1. Decision
 
 Do **not** assign one agent per ADD chapter. Chapters 1–35 mix product constraints, domain contracts, provider adapters, runtime behavior, testing, and delivery concerns. A chapter-per-agent split would create duplicate types, incompatible schemas, and severe merge conflicts.
@@ -381,17 +383,17 @@ two never drift out of sync.
 
 | Role | File | Model | Mission |
 |---|---|---|---|
-| contract-integrator | [`agents/contract-integrator.md`](agents/contract-integrator.md) | Fable | Freeze compile-time/persistence contracts; integrate reviewed branches at the end. |
-| foundation | [`agents/foundation.md`](agents/foundation.md) | Cheaper model; Fable for migration/recovery review | Buildable Go application foundation and the SQLite runtime every other package depends on. |
-| claude-provider | [`agents/claude-provider.md`](agents/claude-provider.md) | Fable for hook semantics; cheaper model for parsers/fixtures | Fixture-backed Claude Code hook/status-line normalization into frozen Auspex events. |
-| checkpoint | [`agents/checkpoint.md`](agents/checkpoint.md) | Fable | Progress Tree + State Checkpointing (Part A) **and** Repository Checkpoint (Part B); no completion without verified artifact evidence, and checkpoints without mutating the active branch. |
-| predictor | [`agents/predictor.md`](agents/predictor.md) | Fable | Deterministic, explainable, cold-start-safe predictor/policy/authorization loop. |
-| runtime | [`agents/runtime.md`](agents/runtime.md) | Fable for Part A (pause/scheduler); cheaper model for most of Part B (CLI/API) | Graceful Pause + durable wake scheduling (Part A) **and** CLI/API/orchestration wiring the vertical slice (Part B). |
-| qa | [`agents/qa.md`](agents/qa.md) | Cheaper model for fixtures/CI; Fable for final adversarial review | Objective evidence that the vertical slice is safe, restartable, idempotent, provider-compatible. |
+| contract-integrator | [`agents/contract-integrator.md`](../../agents/contract-integrator.md) | Fable | Freeze compile-time/persistence contracts; integrate reviewed branches at the end. |
+| foundation | [`agents/foundation.md`](../../agents/foundation.md) | Cheaper model; Fable for migration/recovery review | Buildable Go application foundation and the SQLite runtime every other package depends on. |
+| claude-provider | [`agents/claude-provider.md`](../../agents/claude-provider.md) | Fable for hook semantics; cheaper model for parsers/fixtures | Fixture-backed Claude Code hook/status-line normalization into frozen Auspex events. |
+| checkpoint | [`agents/checkpoint.md`](../../agents/checkpoint.md) | Fable | Progress Tree + State Checkpointing (Part A) **and** Repository Checkpoint (Part B); no completion without verified artifact evidence, and checkpoints without mutating the active branch. |
+| predictor | [`agents/predictor.md`](../../agents/predictor.md) | Fable | Deterministic, explainable, cold-start-safe predictor/policy/authorization loop. |
+| runtime | [`agents/runtime.md`](../../agents/runtime.md) | Fable for Part A (pause/scheduler); cheaper model for most of Part B (CLI/API) | Graceful Pause + durable wake scheduling (Part A) **and** CLI/API/orchestration wiring the vertical slice (Part B). |
+| qa | [`agents/qa.md`](../../agents/qa.md) | Cheaper model for fixtures/CI; Fable for final adversarial review | Objective evidence that the vertical slice is safe, restartable, idempotent, provider-compatible. |
 
 The contract-freeze template `contract-integrator` fills in when it produces
 `docs/implementation/vertical-slice/CONTRACT_FREEZE.md` lives at
-[`agents/CONTRACT_FREEZE_TEMPLATE.md`](agents/CONTRACT_FREEZE_TEMPLATE.md).
+[`agents/CONTRACT_FREEZE_TEMPLATE.md`](../../agents/CONTRACT_FREEZE_TEMPLATE.md).
 
 The prior numbered nine-role structure (`A00`–`A08`) is archived at
 `docs/archive/agent-packets-v1/` for historical reference only.

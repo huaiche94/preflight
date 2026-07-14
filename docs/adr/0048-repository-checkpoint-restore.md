@@ -1,5 +1,7 @@
 # ADR-048 — Real repository checkpoint restore (issue #6)
 
+> 🌐 English | [繁體中文](0048-repository-checkpoint-restore.zh-TW.md)
+
 Status: Accepted
 Date: 2026-07-14
 Owner: lead-executed

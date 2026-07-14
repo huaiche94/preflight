@@ -1,5 +1,7 @@
 # claude-provider — Vertical-Slice Progress Artifact
 
+> 🌐 English | [繁體中文](claude-provider.zh-TW.md)
+
 Role: `claude-provider` (`agents/claude-provider.md`).
 Wave: DAG parallel-root nodes `claude-provider-01`, `claude-provider-02`, `claude-provider-03` (per `docs/implementation/vertical-slice/EXECUTION_DAG.md`).
 Branch: `vertical-slice/claude-provider` (local only — not pushed, not merged into `main`).

@@ -1,5 +1,7 @@
 # A08 — Cross-component QA, Security, Reliability, and CI
 
+> 🌐 English | [繁體中文](08-qa-security-ci.zh-TW.md)
+
 ## Model
 
 Use a cheaper model for fixtures/CI; use Fable for final adversarial review.

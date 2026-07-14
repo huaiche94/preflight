@@ -1,5 +1,7 @@
 # Auspex Predictor Design Supplement
 
+> 🌐 English | [繁體中文](Auspex_Predictor_Design_Supplement.zh-TW.md)
+
 > Status: Accepted — the Forecast-layer gap identified in this document
 > (Scope Estimation feeding Risk Estimation with no explicit Token/Quota
 > forecast stage between them) is formalized as

@@ -1,5 +1,7 @@
 # ADR-045 — Rename the product from Preflight to Auspex (supersedes ADR-001)
 
+> 🌐 English | [繁體中文](0045-rename-to-auspex.zh-TW.md)
+
 Status: Accepted
 Date: 2026-07-13
 Owner: lead

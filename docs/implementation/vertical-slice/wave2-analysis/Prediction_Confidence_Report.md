@@ -1,5 +1,7 @@
 # Prediction Confidence Report
 
+> 🌐 English | [繁體中文](Prediction_Confidence_Report.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | Phase | 3.8 — Post Wave 2 Analysis |

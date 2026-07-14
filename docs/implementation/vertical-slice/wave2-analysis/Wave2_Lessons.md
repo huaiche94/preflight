@@ -1,5 +1,7 @@
 # Wave 2 Lessons Aggregation
 
+> 🌐 English | [繁體中文](Wave2_Lessons.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | Phase | 3.3 — Post Wave 2 Analysis |

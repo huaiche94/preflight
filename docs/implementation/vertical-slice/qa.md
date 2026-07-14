@@ -1,5 +1,7 @@
 # qa — Progress Artifact
 
+> 🌐 English | [繁體中文](qa.zh-TW.md)
+
 ## Handoff notes (Constitution §6.7 / agents/qa.md)
 
 - **CI entry point**: `.github/workflows/ci.yml` (qa-01). Calls into

@@ -1,5 +1,7 @@
 # ADR-043 — Generalize quota runway into a multi-resource forecast (context window, cost budget, rate limits)
 
+> 🌐 English | [繁體中文](0043-multi-resource-runway.zh-TW.md)
+
 Status: Accepted (direction); implementation staged with issue #14
 Date: 2026-07-13
 Owner: lead (predictor + policy surfaces), with contract-integrator for any frozen-port change

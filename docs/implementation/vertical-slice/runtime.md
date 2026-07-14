@@ -1,5 +1,7 @@
 # runtime — Progress Artifact
 
+> 🌐 English | [繁體中文](runtime.zh-TW.md)
+
 > **Wave 11 sections appended below the Wave 10 node log** — see "Wave 11"
 > heading. Wave 11 completes `runtime-b10`, the final Part B
 > integration/reliability gate and this role's LAST assigned DAG node —

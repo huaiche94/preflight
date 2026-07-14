@@ -1,5 +1,7 @@
 # ADR-046 — Tiered telemetry retention: hot raw window → rollup → gzip archive → delete
 
+> 🌐 English | [繁體中文](0046-tiered-telemetry-retention.zh-TW.md)
+
 Status: Accepted
 Date: 2026-07-13
 Owner: lead (storage/CLI surfaces), with contract-integrator for the new

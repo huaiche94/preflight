@@ -1,5 +1,7 @@
 # foundation — Progress Artifact
 
+> 🌐 English | [繁體中文](foundation.zh-TW.md)
+
 ## Handoff notes (Constitution §6.7 / agents/foundation.md "Handoff")
 
 - **DB constructor**: `sqlite.Open(ctx, path) (*DB, error)`

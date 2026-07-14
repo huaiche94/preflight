@@ -1,23 +1,34 @@
-# Claude Code plugin/hooks example (claude-provider-06)
+# Claude Code plugin/hooks wiring
 
-Status: **forward-looking stub.** The `auspex` CLI binary and its `hook
-claude ...` subcommands do not exist yet on this branch — that is
-`runtime-b01`'s deliverable (Part B, `agents/runtime.md`), not this role's.
-Per `docs/implementation/vertical-slice/EXECUTION_DAG.md`'s own note on
-`claude-provider-06` ("Needs `runtime-b01` CLI skeleton for true
-end-to-end (stub acceptable before then)"), the files here are example
-configuration only: syntactically valid, internally consistent with this
-role's Wave-1/Wave-2 deliverables, but not yet exercisable end-to-end
-against a real `auspex` binary.
+> 🌐 English | [繁體中文](README.zh-TW.md)
+
+Status: **live.** The `auspex` binary ships all four
+`auspex hook claude ...` subcommands (`user-prompt-submit`, `stop`,
+`stop-failure`, `statusline`), and this wiring runs end-to-end in real
+sessions — this repository's own Claude Code sessions use it daily
+(issue #12 dogfooding). The files here are the reference configuration
+to copy into your Claude Code setup. Hooks fail open: an Auspex-side
+error never blocks or hangs your session; run `auspex evaluate`
+directly to surface real errors.
+
+Sessions self-register: the hooks idempotently create
+repository/worktree/session rows on first contact (issue #17, decision
+D-07 "lazy bootstrap"), so there is no required setup step beyond the
+hook wiring itself. `auspex init` also exists for explicit registration
+of the current repository.
+
+(This file began as `claude-provider-06`'s forward-looking stub during
+the vertical-slice build; the naming-discrepancy record below is kept
+from that era because it is still unresolved.)
 
 ## Files
 
 - `plugin.json` — Claude Code plugin manifest, verbatim from
-  `Auspex_ADD.md` Appendix E.2 (this role's documented ownership:
+  `docs/design/Auspex_ADD.md` Appendix E.2 (this role's documented ownership:
   "Appendix E.2/E.3").
 - `hooks.json` — Claude Code hook + status-line configuration wiring
   `UserPromptSubmit`, `Stop`, `StopFailure`, and the status line to
-  `auspex hook claude ...` subcommands, per `Auspex_ADD.md` §22.3/
+  `auspex hook claude ...` subcommands, per `docs/design/Auspex_ADD.md` §22.3/
   §22.4/§22.5 and Appendix E.3's shape (`{"hooks": {"<HookEventName>":
   [{"hooks": [{"type": "command", "command": "..."}]}]}}`).
 
@@ -25,7 +36,7 @@ against a real `auspex` binary.
 
 Two governing documents name the same subcommands with different casing:
 
-- `Auspex_ADD.md` Appendix E.3 (priority 2, `agents/claude-provider.md`'s
+- `docs/design/Auspex_ADD.md` Appendix E.3 (priority 2, `agents/claude-provider.md`'s
   own documented ownership) writes `auspex hook claude UserPromptSubmit`
   — PascalCase, matching Claude Code's own wire-level `hook_event_name`
   field exactly.
@@ -40,18 +51,18 @@ because:
 
 1. it is the literal, currently-frozen validation command for this exact
    node, and
-2. it is standard Go CLI subcommand convention (`cobra`/`urfave/cli` style),
-   which is what `runtime-b01` (CLI skeleton, not yet built) will most
-   likely use.
+2. it is standard Go CLI subcommand convention (`cobra`/`urfave/cli`
+   style) — and it is what the shipped CLI actually implements
+   (`auspex hook claude --help` lists the kebab-case forms).
 
 This is a **judgment call, not a resolution** of the Constitution §2
 document-priority ordering, which would favor the ADD (priority 2) over
 `agents/runtime.md` (priority 4) if the two are read as being in real
 conflict. Flagged here, and in this role's progress artifact, for
 `contract-integrator` to reconcile — e.g. by updating
-`Auspex_ADD.md` Appendix E.3 to match the kebab-case CLI convention, or
+`docs/design/Auspex_ADD.md` Appendix E.3 to match the kebab-case CLI convention, or
 by updating `agents/runtime.md`/the DAG to match the ADD's PascalCase. This
-role does not have authority to edit either document (`Auspex_ADD.md`
+role does not have authority to edit either document (`docs/design/Auspex_ADD.md`
 and `agents/runtime.md` are both outside `claude-provider`'s exclusive
 paths) and has not silently picked one without recording the conflict.
 
@@ -76,9 +87,9 @@ observation failures, and this role's Wave-1 progress artifact assumptions
 for `claude-provider-02`). The wrapper itself (the code that reads stdin,
 calls these functions, and writes the wire response documented in
 `internal/hooks/claude/userpromptsubmit.go`'s
-`EncodeUserPromptSubmitResponse`) is `runtime-b01`/Part B's CLI plumbing,
-not this role's — only the primitives it will call are this role's
-deliverable.
+`EncodeUserPromptSubmitResponse`) was delivered as `runtime-b01`/Part B's
+CLI plumbing and ships in the binary today — only the primitives it
+calls were this role's deliverable.
 
 ## Status line: `--emit-line` (issue #14; resolves issue #12 friction #2)
 
@@ -88,14 +99,16 @@ ingest-only (parse + normalize + persist, no stdout), so wiring it
 directly blanked the user's status bar (recorded as friction #2 on issue
 #12; the dogfooding install worked around it with a tee-wrapper script).
 `hooks.json`'s `statusLine` entry now uses `--emit-line`, which keeps the
-exact same ingest behavior AND prints one compact display line:
+exact same ingest behavior AND prints one compact display line (v3
+format per D-15, issue #41; the original #14 line carried a token
+segment, withdrawn until forecasts respond to the prompt, #42):
 
 ```text
-pf✈ <model> | est P50 <tokens>tok ~$<low>–<high> | <policy action>
+ax» <model> │ ◷ weekly ~<pct>% │ context [<bar>] <cur>% (p90 ≤<pct>%) │ ✓ RUN
 ```
 
 using the latest persisted evaluation/forecast for the session when one
-exists, else just `pf✈ <model>`. Without the flag the command remains
+exists, else just `ax» <model>`. Without the flag the command remains
 byte-identical to its previous ingest-only behavior (no stdout), for any
 installation that still composes Auspex with its own status-line
 command. Cost is an estimated range from `internal/pricing`'s default
@@ -103,11 +116,11 @@ table (ADR-043) — an uncalibrated estimate, never a measured cost.
 
 ## Installer behavior not modeled here
 
-`Auspex_ADD.md` §22.6 ("Compose existing status line") describes
-installer behavior — reading any pre-existing status-line command, saving
-it, and composing Auspex's wrapper output with it rather than clobbering
-it — that a real installer (not yet built; likely `runtime-b01` or a future
-CLI `auspex init` path) must implement. `hooks.json` here sets
+`docs/design/Auspex_ADD.md` §22.6 ("Compose existing status line")
+describes installer behavior — reading any pre-existing status-line
+command, saving it, and composing Auspex's wrapper output with it rather
+than clobbering it. `auspex init` registers the current repository but
+does not implement this compose/merge step. `hooks.json` here sets
 `statusLine` directly as a static example and does not attempt to model
 that compose/merge behavior, since a static example file cannot express
 "read what was there before" — that is inherently install-time logic.

@@ -7,6 +7,8 @@
 
 # Agent Packets
 
+> 🌐 English | [繁體中文](README.zh-TW.md)
+
 This directory holds one **hand-off packet per Day-1 agent** (`A00`–`A08`).
 Each file is meant to be given, on its own, to an isolated agent/worktree so
 it does not need the full architecture document or the full execution plan

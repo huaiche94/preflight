@@ -1,5 +1,7 @@
 # Decision Log（決策日誌）
 
+> 🌐 本文件以繁體中文撰寫，即為決策紀錄的規範文本——與 `docs/design/Auspex_ADD.md` 同為 ADR-049「原著語言為規範」規則下的兩個中文原著，不另建會漂移的譯本。
+
 | Field | Value |
 |---|---|
 | Purpose | 記錄每一個**由 repository owner 選擇**的決策：當時的選項、優缺點、選擇結果、後果與可逆性，供日後 review |
@@ -85,6 +87,20 @@ flowchart TD
     D14 ==>|✅ A+B：顯示分離 + token 常數| D14A[measured→projected 顯示<br/>增長預設改 token 表達]
     D14 -.->|✗ 只修顯示 A| D14B[1M 窗投影仍悲觀 10 倍]
     D14 -.->|✗ 只等 #11/#20 校準| D14C[cold-start 悲觀持續數週]
+
+    D14A --> D15{D-15 statusline v3 重設計}
+    D15 ==>|✅ owner mock 版式| D15A[token 段下架 #42 gate<br/>實測優先 context、ax»]
+    D15 -.->|✗ 保留 token 段| D15B[cold-start 常數無訊號]
+
+    D15A --> D16{D-16 daemon 形態 + token 存放}
+    D16 ==>|✅ 混合 + data dir 0600| D16A[前景程序 + launchd plist<br/>daemon.token 每啟動輪換]
+    D16 -.->|✗ 純手動 / launchd 全自動| D16B[驗收靠使用者 / 平台綁死]
+    D16 -.->|✗ Keychain / 不落地| D16C[darwin 專屬 / SSE 重連複雜]
+
+    D16A --> D17{D-17 文件重組 + 雙語}
+    D17 ==>|✅ docs/design/ + zh-TW 非規範| D17A[ADR-049：三設計文件搬遷<br/>每資料夾 README、原著語言為規範]
+    D17 -.->|✗ 全部搬進 docs/| D17B[破壞 GitHub 社群檔慣例]
+    D17 -.->|✗ 中文平行規範| D17C[雙 source of truth 風險]
 ```
 
 ---
@@ -212,6 +228,13 @@ flowchart TD
 - **決定②（token 存放）：data dir 0600 檔案** —— `<data>/daemon.token`，每次啟動輪換（ADD §27.5），與 Docker/k8s loopback 慣例一致、跨平台、可測試；#10 VS Code 擴充讀同一路徑即可。未選：macOS Keychain（darwin 專屬、CI/headless 麻煩）、每次啟動隨機不落地（客戶端每次重新發現 token，SSE 重連複雜）。
 - **實作附帶（lead 判斷，未開選項）：** pauseContext（QuotaBaseline／GitHeadBaseline／WorktreeID／PausedWorkPaths）原為 Service 的 in-memory bookkeeping，跨行程的 daemon worker 拿不到——持久化進 `pause_records.metadata_json` 既有 free-form 欄位（encodePauseMetadata／persistProgressMetadata 已建立同欄位合併式編碼先例），不新增 migration（Constitution §4.7 range 紀律）。
 - **可逆性：** 中——token 路徑與 plist 形態是單點；metadata_json 的 context 鍵一旦有 sleeping 中的 pause 依賴，變更需要 backfill。
+
+## D-17 — 文件重組 + 雙語文件政策（ADR-049）
+
+- **日期／情境：** 2026-07-14。Owner 要求：以 first-time viewer 視角重寫 `README.md`、根目錄 `.md` 整理進 `docs/`、每個資料夾都要有 `README.md` 介紹、所有 `.md` 提供繁體中文版本，且文件措辭避免模糊描述（如「CI 綠了」）。
+- **決定：** ①三份設計文件（`Auspex_ADD.md`、`Auspex_Predictor_Design_Supplement.md`、`Auspex_Parallel_Execution_Plan.md`）→ `docs/design/`，檔名不變（`§` 引用照舊可 grep）；②九份 GitHub 社群慣例／流程權威檔（README、AGENTS、CHANGELOG、CODE_OF_CONDUCT、CONSTITUTION、CONTRIBUTING、GOVERNANCE、SECURITY、SUPPORT）留在根目錄；③活文件更新路徑引用，歷史紀錄（accepted ADRs、`docs/archive/`、`docs/implementation/` 進度日誌、Go 註解、checksummed fixtures）一律不改寫；④雙語政策：每份文件加 `<name>.zh-TW.md`，**以原著語言為規範文本**——除了兩份中文原著（`docs/design/Auspex_ADD.md` 本體即繁中、`docs/DECISION_LOG.md` 即本檔）以中文為規範、不另建會漂移的 zh-TW 副本外，其餘全部以英文版為準，分歧時中文版是 bug；⑤測試 fixture 的 `.md`（如 `testdata/checkpoints/state/add-section-18-*.md`）是測試輸入不是文件，不翻譯、其目錄不加 README（避免破壞列舉／checksum 測試）。完整條文見 ADR-049。
+- **未選：** 全部 `.md` 搬進 `docs/`（破壞 GitHub 社群檔案慣例與 agent 工具對根目錄 `AGENTS.md` 的預期）；只加連結不搬移（根目錄依舊 12 檔）；中文版列為平行規範文本（製造第二個 source of truth，違反 Constitution §1 精神）。
+- **可逆性：** 高——`git mv` ＋引用更新可單一 commit 回復；翻譯與資料夾 README 是純新增檔案，刪除即回復。
 
 ## 待決（尚未成為決策點）
 

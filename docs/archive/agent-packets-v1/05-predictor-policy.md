@@ -1,5 +1,7 @@
 # A05 — Scope Estimator, Predictor, Risk, Policy, and Authorization
 
+> 🌐 English | [繁體中文](05-predictor-policy.zh-TW.md)
+
 ## Model
 
 Use Fable.

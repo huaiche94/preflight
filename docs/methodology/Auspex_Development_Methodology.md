@@ -1,5 +1,7 @@
 # Auspex Development Methodology (PDM)
 
+> 🌐 English | [繁體中文](Auspex_Development_Methodology.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | Version | 1.0.0 |

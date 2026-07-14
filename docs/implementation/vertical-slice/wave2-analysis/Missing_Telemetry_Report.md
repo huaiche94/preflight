@@ -1,5 +1,7 @@
 # Missing Telemetry Report
 
+> 🌐 English | [繁體中文](Missing_Telemetry_Report.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | Phase | 3.6 — Post Wave 2 Analysis |

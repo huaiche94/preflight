@@ -1,5 +1,7 @@
 # Feature Registry
 
+> 🌐 English | [繁體中文](Feature_Registry.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | Phase | 3.7 — Post Wave 2 Analysis |
