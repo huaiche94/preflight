@@ -381,7 +381,7 @@ func TestStatusLine_EmitLinePrintsOneCompactLine(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if want := "pf✈ Opus 4.1 | est P50 8000tok ~$0.02–0.68 | WARN\n"; out.String() != want {
+	if want := "ax✈ Opus 4.1 | est P50 8000tok ~$0.02–0.68 | WARN\n"; out.String() != want {
 		t.Errorf("emit-line output = %q, want %q", out.String(), want)
 	}
 }
@@ -397,7 +397,7 @@ func TestStatusLine_EmitLine_MalformedInputStillPrintsFallback(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("Execute should fail open, got: %v", err)
 	}
-	if out.String() != "pf✈\n" {
+	if out.String() != "ax✈\n" {
 		t.Errorf("output = %q, want the bare fallback line — the status bar must never go blank", out.String())
 	}
 }

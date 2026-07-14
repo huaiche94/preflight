@@ -237,12 +237,12 @@ func statusLineIngest(ctx context.Context, deps HookDeps, stdin []byte) (claudep
 // shared implementation, so the two cannot drift) and additionally
 // composes the one-line display text:
 //
-//	pf✈ <model> | est P50 <tokens>tok ~$<low>–<high> | <policy action>
+//	ax✈ <model> | est P50 <tokens>tok ~$<low>–<high> | <policy action>
 //
 // using the latest persisted evaluation for the session when one exists
-// (deps.Forecast.LatestForecastCard), else just "pf✈ <model>". Every
+// (deps.Forecast.LatestForecastCard), else just "ax✈ <model>". Every
 // degradation is fail-open into a shorter line, never an error and never
-// an empty line: malformed stdin renders bare "pf✈", a missing model
+// an empty line: malformed stdin renders bare "ax✈", a missing model
 // omits the model segment, a missing/errored card omits the forecast
 // segments — a status line must keep rendering even when Auspex cannot
 // parse its own input (the same ADD §17.5 discipline HandleStatusLine

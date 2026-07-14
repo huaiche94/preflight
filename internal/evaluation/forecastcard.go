@@ -305,9 +305,9 @@ func (c ForecastCard) AdditionalContext() string {
 // StatusLineText renders the one-line statusline display (issue #14
 // deliverable 4; resolves issue #12 friction #2's ingest-only gap):
 //
-//	pf✈ <model> | est P50 <tokens>tok ~$<low>–<high> | ctx P90 ~<pct>% | <policy action>
+//	ax✈ <model> | est P50 <tokens>tok ~$<low>–<high> | ctx P90 ~<pct>% | <policy action>
 //
-// model may be empty (renders as bare "pf✈") and card may be nil (no
+// model may be empty (renders as bare "ax✈") and card may be nil (no
 // persisted evaluation for the session yet — renders model only), so the
 // status bar always has something to show; "est"/"~" mark every number as
 // an estimate, and the full uncalibrated labeling lives on the card
@@ -319,7 +319,7 @@ func (c ForecastCard) AdditionalContext() string {
 // Exported as a package function rather than a method so the nil-card
 // fallback is one code path, not caller-side duplication.
 func StatusLineText(model string, card *ForecastCard) string {
-	head := "pf✈"
+	head := "ax✈"
 	if model != "" {
 		head += " " + model
 	}

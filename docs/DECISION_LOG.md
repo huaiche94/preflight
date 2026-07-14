@@ -158,6 +158,7 @@ flowchart TD
 
 - **選項：** ①**#21 + #20 Phase 0 捕捉先（✅）**——capture-before-model 紀律：晚一天記錄就是一天 unlabeled 歷史，#11 校準要分層的正是這些欄位；②#11 校準骨架先（缺標籤恐返工）；③#7 daemon 先（資料飛輪慢幾週）。
 - **首次 E2E 回饋紀錄（2026-07-13）：** owner 的互動 session 仍掛改名前設定（見到舊 `pf✈`、未見預估卡）——結論：hooks 在 session 啟動時快照，改設定需重開 session。卡片觀感回饋延至 owner 實際體驗後（下次 session 結尾再問）。
+- **更正（2026-07-13，同日稍晚）：** 上述歸因不完整——重開 session 後仍見 `pf✈`，追查發現 ADR-045 決定的 `pf✈`→`ax✈` 從未在程式碼落地（`git log -S 'ax✈'` 無任何 commit；改名 commit 只動了文件）。已改 `StatusLineText` 及全部測試並重新部署 `~/.local/bin/auspex`。教訓：ADR 的 Consequences 條列若含程式碼變更，落地 commit 應在同一 PR 或明確開 issue 追蹤，不能只寫在 ADR 裡。
 
 ---
 
