@@ -319,12 +319,28 @@ const (
 	ansiCyan    = "\x1b[36m"
 )
 
+// StatusLineInput carries the per-render inputs StatusLineText composes.
+// Model, ContextUsedPercent, and WeeklyLimitUsedPercent come from the
+// LIVE statusline snapshot (measurements); Card carries the persisted
+// per-turn forecast (predictions). Keeping them separate on the input is
+// what lets the context segment show "measured → projected" honestly.
+type StatusLineInput struct {
+	Model string
+	Card  *ForecastCard
+	// ContextUsedPercent is the live measured context usage — prefer the
+	// exact token ratio over the provider's whole-percent rounding
+	// (D-14). nil means unknown, never zero.
+	ContextUsedPercent *float64
+	// WeeklyLimitUsedPercent is the live seven-day quota window (#27).
+	WeeklyLimitUsedPercent *float64
+}
+
 // StatusLineText renders the one-line statusline display (issue #14
 // deliverable 4; resolves issue #12 friction #2's ingest-only gap; icons
 // and semantic colors are issue #29; the plain-language format is the
-// owner's D-13 decision, issue #31):
+// owner's D-13 decision, issue #31; measured→projected split is D-14):
 //
-//	ax✈ <model> │ 🔮 probably (50%) < <n> tokens │ context worst-case [<bar>] ~<pct>% │ ◷ weekly limit ~<pct>% │ <policy scale>
+//	ax✈ <model> │ 🔮 probably (50%) < <n> tokens │ context [<bar>] <cur>% → worst-case ~<pct>% │ ◷ weekly limit ~<pct>% │ <policy scale>
 //
 // model may be empty (renders as bare "ax✈") and card may be nil (no
 // persisted evaluation for the session yet), so the status bar always has
@@ -349,22 +365,31 @@ const (
 // rather than animate. Exported as a package function rather than a
 // method so the nil-card fallback is one code path, not caller-side
 // duplication.
-func StatusLineText(model string, card *ForecastCard, weeklyLimitUsedPercent *float64) string {
+func StatusLineText(in StatusLineInput) string {
 	head := ansiCyan + "ax✈" + ansiReset
-	if model != "" {
-		head += " " + model
+	if in.Model != "" {
+		head += " " + in.Model
 	}
 	parts := []string{head}
-	if card != nil {
-		if card.TokensP50 != nil {
-			parts = append(parts, fmt.Sprintf("🔮 probably (50%%) < %d tokens", *card.TokensP50))
+	if in.Card != nil {
+		if in.Card.TokensP50 != nil {
+			parts = append(parts, fmt.Sprintf("🔮 probably (50%%) < %d tokens", *in.Card.TokensP50))
 		}
-		if card.ContextProjectedP90 != nil {
-			seg := fmt.Sprintf("context worst-case %s ~%.0f%%", contextBar(*card.ContextProjectedP90), *card.ContextProjectedP90)
+		if in.Card.ContextProjectedP90 != nil {
+			pct := *in.Card.ContextProjectedP90
+			var seg string
+			if in.ContextUsedPercent != nil {
+				// Measurement first (one decimal — it is exact), then
+				// the projection with its estimate marker: the reader
+				// sees exactly how much of the number is prediction.
+				seg = fmt.Sprintf("context %s %.1f%% → worst-case ~%.0f%%", contextBar(pct), *in.ContextUsedPercent, pct)
+			} else {
+				seg = fmt.Sprintf("context worst-case %s ~%.0f%%", contextBar(pct), pct)
+			}
 			switch {
-			case card.ContextCheckpointThresholdExceeded:
+			case in.Card.ContextCheckpointThresholdExceeded:
 				seg = ansiRed + seg + " (checkpoint)" + ansiReset
-			case card.ContextWarnThresholdExceeded:
+			case in.Card.ContextWarnThresholdExceeded:
 				seg = ansiYellow + seg + " (warn)" + ansiReset
 			default:
 				seg = ansiGreen + seg + ansiReset
@@ -372,11 +397,11 @@ func StatusLineText(model string, card *ForecastCard, weeklyLimitUsedPercent *fl
 			parts = append(parts, seg)
 		}
 	}
-	if weeklyLimitUsedPercent != nil {
-		parts = append(parts, fmt.Sprintf("◷ weekly limit ~%.0f%%", *weeklyLimitUsedPercent))
+	if in.WeeklyLimitUsedPercent != nil {
+		parts = append(parts, fmt.Sprintf("◷ weekly limit ~%.0f%%", *in.WeeklyLimitUsedPercent))
 	}
-	if card != nil && card.PolicyAction != "" {
-		parts = append(parts, policyScale(card.PolicyAction))
+	if in.Card != nil && in.Card.PolicyAction != "" {
+		parts = append(parts, policyScale(in.Card.PolicyAction))
 	}
 	return strings.Join(parts, ansiDim+" │ "+ansiReset)
 }

@@ -237,7 +237,7 @@ func statusLineIngest(ctx context.Context, deps HookDeps, stdin []byte) (claudep
 // shared implementation, so the two cannot drift) and additionally
 // composes the one-line display text:
 //
-//	ax✈ <model> │ 🔮 probably (50%) < <n> tokens │ context worst-case [<bar>] ~<pct>% │ ◷ weekly limit ~<pct>% │ <policy scale>
+//	ax✈ <model> │ 🔮 probably (50%) < <n> tokens │ context [<bar>] <cur>% → worst-case ~<pct>% │ ◷ weekly limit ~<pct>% │ <policy scale>
 //
 // using the latest persisted evaluation for the session when one exists
 // (deps.Forecast.LatestForecastCard), else just "ax✈ <model>" plus the
@@ -251,7 +251,7 @@ func statusLineIngest(ctx context.Context, deps HookDeps, stdin []byte) (claudep
 func HandleStatusLineEmitLine(ctx context.Context, deps HookDeps, stdin []byte) (StatusLineResult, string, error) {
 	snap, result, parsedOK := statusLineIngest(ctx, deps, stdin)
 	if !parsedOK {
-		return result, evaluation.StatusLineText("", nil, nil), nil
+		return result, evaluation.StatusLineText(evaluation.StatusLineInput{}), nil
 	}
 
 	model := ""
@@ -271,10 +271,29 @@ func HandleStatusLineEmitLine(ctx context.Context, deps HookDeps, stdin []byte) 
 		// cold start and a card-read failure look identical here by
 		// design; the status bar is no place for an error message.
 	}
-	// The weekly-limit segment comes straight from the live snapshot (the
-	// seven-day window is real observed data since #27), NOT from the
-	// card — it renders even when the session has no forecast yet.
-	return result, evaluation.StatusLineText(model, card, snap.SevenDayUsedPercent), nil
+	// The context-measurement and weekly-limit inputs come straight from
+	// the live snapshot (real observed data since #27), NOT from the
+	// card — they render even when the session has no forecast yet. The
+	// current context percent prefers the exact token ratio over the
+	// provider's whole-percent rounding (D-14), mirroring the predictor's
+	// own input preference.
+	var ctxCurrent *float64
+	if snap.ContextInputTokens != nil && snap.ContextWindowSize != nil && *snap.ContextWindowSize > 0 {
+		total := *snap.ContextInputTokens
+		if snap.ContextOutputTokens != nil {
+			total += *snap.ContextOutputTokens
+		}
+		pct := float64(total) / float64(*snap.ContextWindowSize) * 100
+		ctxCurrent = &pct
+	} else if snap.ContextUsedPercent != nil {
+		ctxCurrent = snap.ContextUsedPercent
+	}
+	return result, evaluation.StatusLineText(evaluation.StatusLineInput{
+		Model:                  model,
+		Card:                   card,
+		ContextUsedPercent:     ctxCurrent,
+		WeeklyLimitUsedPercent: snap.SevenDayUsedPercent,
+	}), nil
 }
 
 // --- auspex hook claude user-prompt-submit -------------------------------

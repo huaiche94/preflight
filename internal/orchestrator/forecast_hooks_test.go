@@ -247,8 +247,10 @@ func TestHookHandlers_HighContextCardRendersThresholdState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HandleStatusLineEmitLine: %v", err)
 	}
-	if !strings.Contains(line, "context worst-case [██████████████████··] ~91% (warn)") {
-		t.Errorf("emit-line = %q, want the context segment with bar and warn marker", line)
+	// normal.json carries exact context tokens (42000+1800 of 200000 =
+	// 21.9%), so the segment splits measured → projected (D-14).
+	if !strings.Contains(line, "context [██████████████████··] 21.9% → worst-case ~91% (warn)") {
+		t.Errorf("emit-line = %q, want the measured→projected context segment", line)
 	}
 }
 

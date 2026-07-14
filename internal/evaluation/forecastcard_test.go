@@ -353,33 +353,39 @@ func TestStatusLineText(t *testing.T) {
 		bar97 = "[███████████████████·]"
 	)
 	weekly := 31.4
+	ctxCur := 26.8173
 	cases := []struct {
-		name   string
-		model  string
-		card   *evaluation.ForecastCard
-		weekly *float64
-		want   string
+		name string
+		in   evaluation.StatusLineInput
+		want string
 	}{
-		{"no model no card", "", nil, nil, brand},
-		{"model only", "Opus 4.1", nil, nil, brand + " Opus 4.1"},
+		{"no model no card", evaluation.StatusLineInput{}, brand},
+		{"model only", evaluation.StatusLineInput{Model: "Opus 4.1"}, brand + " Opus 4.1"},
 		// D-13: no cost segment on the line; the P50 renders as a
 		// plain-language probability with the quantile in parentheses.
-		{"full", "Opus 4.1", &card, nil,
+		// Without a live measurement the context segment keeps the
+		// projection-only wording.
+		{"full", evaluation.StatusLineInput{Model: "Opus 4.1", Card: &card},
 			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + yellow + "context worst-case " + bar91 + " ~91% (warn)" + reset + sep + scaleWarn},
-		{"context without threshold decision", "Opus 4.1", &noThresholdCard, nil,
+		{"context without threshold decision", evaluation.StatusLineInput{Model: "Opus 4.1", Card: &noThresholdCard},
 			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + green + "context worst-case " + bar91 + " ~91%" + reset + sep + scaleWarn},
-		{"checkpoint marker outranks warn", "Opus 4.1", &checkpointCard, nil,
+		{"checkpoint marker outranks warn", evaluation.StatusLineInput{Model: "Opus 4.1", Card: &checkpointCard},
 			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + red + "context worst-case " + bar97 + " ~97% (checkpoint)" + reset + sep + scaleWarn},
+		// D-14: with a live measurement the segment splits measured →
+		// projected — one decimal on the measurement (it is exact), the
+		// estimate marker stays on the projection.
+		{"measured context splits from projection", evaluation.StatusLineInput{Model: "Opus 4.1", Card: &card, ContextUsedPercent: &ctxCur},
+			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + yellow + "context " + bar91 + " 26.8% → worst-case ~91% (warn)" + reset + sep + scaleWarn},
 		// The weekly segment is snapshot data, independent of the card:
 		// it renders on a forecast-cold session (uncolored until #21
 		// gives it honest thresholds) and slots before the policy scale.
-		{"weekly limit without card", "Opus 4.1", nil, &weekly,
+		{"weekly limit without card", evaluation.StatusLineInput{Model: "Opus 4.1", WeeklyLimitUsedPercent: &weekly},
 			brand + " Opus 4.1" + sep + "◷ weekly limit ~31%"},
-		{"full with weekly", "Opus 4.1", &card, &weekly,
+		{"full with weekly", evaluation.StatusLineInput{Model: "Opus 4.1", Card: &card, WeeklyLimitUsedPercent: &weekly},
 			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + yellow + "context worst-case " + bar91 + " ~91% (warn)" + reset + sep + "◷ weekly limit ~31%" + sep + scaleWarn},
 	}
 	for _, tc := range cases {
-		if got := evaluation.StatusLineText(tc.model, tc.card, tc.weekly); got != tc.want {
+		if got := evaluation.StatusLineText(tc.in); got != tc.want {
 			t.Errorf("%s: StatusLineText = %q, want %q", tc.name, got, tc.want)
 		}
 	}
@@ -388,14 +394,14 @@ func TestStatusLineText(t *testing.T) {
 	// never "probably < 0 tokens", and an unknown context projection
 	// contributes no "context ~0%" segment either (unknown is not zero).
 	coldCard := evaluation.ForecastCard{PolicyAction: app.PolicyRun}
-	if got, want := evaluation.StatusLineText("Sonnet 4", &coldCard, nil), brand+" Sonnet 4"+sep+scaleRun; got != want {
+	if got, want := evaluation.StatusLineText(evaluation.StatusLineInput{Model: "Sonnet 4", Card: &coldCard}), brand+" Sonnet 4"+sep+scaleRun; got != want {
 		t.Errorf("cold card: StatusLineText = %q, want %q", got, want)
 	}
 
 	// An action outside the known scale renders alone as its raw string —
 	// never dropped, never mislabeled as a step on the scale.
 	unknownCard := evaluation.ForecastCard{PolicyAction: app.PolicyAction("FUTURE_ACTION")}
-	if got, want := evaluation.StatusLineText("Sonnet 4", &unknownCard, nil), brand+" Sonnet 4"+sep+"FUTURE_ACTION"; got != want {
+	if got, want := evaluation.StatusLineText(evaluation.StatusLineInput{Model: "Sonnet 4", Card: &unknownCard}), brand+" Sonnet 4"+sep+"FUTURE_ACTION"; got != want {
 		t.Errorf("unknown action: StatusLineText = %q, want %q", got, want)
 	}
 }
@@ -414,7 +420,7 @@ func TestStatusLineText_ContextBarFill(t *testing.T) {
 		130: "[████████████████████]", // clamped, never overflows
 	} {
 		card := evaluation.ForecastCard{ContextProjectedP90: &pct, PolicyAction: app.PolicyRun}
-		if got := evaluation.StatusLineText("M", &card, nil); !strings.Contains(got, "context worst-case "+bar+" ") {
+		if got := evaluation.StatusLineText(evaluation.StatusLineInput{Model: "M", Card: &card}); !strings.Contains(got, "context worst-case "+bar+" ") {
 			t.Errorf("pct %.0f: line %q missing bar %q", pct, got, bar)
 		}
 	}

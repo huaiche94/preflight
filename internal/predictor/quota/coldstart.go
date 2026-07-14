@@ -34,18 +34,31 @@ const (
 	tokenScaledDeltaCeiling = 3.0
 )
 
-// defaultContextGrowthP50/P90 are the cold-start "typical turn" net
-// context-window growth, as a fraction of the context window's total
-// token capacity (0-1), used when no same-session delta history exists to
-// calibrate against (ADD §15.9: "以 same-session deltas calibrate" —
-// unreachable this wave for the same reason as the quota defaults above).
-// Context growth is normally smaller as a fraction than quota burn since
-// provider cache/compaction reduces net growth relative to total tokens
-// processed (ADD §15.9: "Net growth 不等於 total tokens，因 provider
-// cache/compaction"); these bootstrap values are deliberately more
-// conservative (larger) than a "cache always helps" assumption would
-// suggest, so a first cold-start estimate does not understate risk.
+// defaultContextGrowthP50/P90Tokens are the cold-start "typical turn" net
+// context-window growth, in TOKENS, used when no same-session delta
+// history exists to calibrate against (ADD §15.9: "以 same-session deltas
+// calibrate" — unreachable this wave for the same reason as the quota
+// defaults above). D-14: these were originally window-capacity fractions
+// (0.03/0.10) tuned when 200k was the only window size — on a 1M window
+// "10% per turn" meant an absurd 100k tokens and the projection ran a
+// full order of magnitude hot (the owner's first-night dogfooding
+// caught it). The token values below are the SAME absolute growth those
+// fractions meant on a 200k window, so 200k behavior is unchanged and
+// larger windows scale honestly. Context growth is normally smaller than
+// total tokens processed since provider cache/compaction reduces net
+// growth (ADD §15.9); these bootstrap values stay deliberately
+// conservative so a first cold-start estimate does not understate risk.
 const (
-	defaultContextGrowthP50Fraction = 0.03
-	defaultContextGrowthP90Fraction = 0.10
+	defaultContextGrowthP50Tokens = 6_000.0
+	defaultContextGrowthP90Tokens = 20_000.0
+)
+
+// fallbackContextGrowthP50/P90Fraction are the pre-D-14 window-fraction
+// defaults, kept ONLY for the degenerate case where the observation
+// carries a UsedPercent but no WindowTokens — token growth cannot be
+// converted to percentage points without a window size, and dropping the
+// projection entirely would regress D-08's protection to blind.
+const (
+	fallbackContextGrowthP50Fraction = 0.03
+	fallbackContextGrowthP90Fraction = 0.10
 )
