@@ -21,6 +21,17 @@ func fixture(t *testing.T, name string) []byte {
 
 func ptr[T any](v T) *T { return &v }
 
+// findWindow returns the named rate-limit window, or nil when the snapshot
+// did not capture it.
+func findWindow(snap StatusLineSnapshot, limitID string) *RateLimitWindow {
+	for i := range snap.RateLimitWindows {
+		if snap.RateLimitWindows[i].LimitID == limitID {
+			return &snap.RateLimitWindows[i]
+		}
+	}
+	return nil
+}
+
 func TestParseStatusLine(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -51,15 +62,22 @@ func TestParseStatusLine(t *testing.T) {
 				if snap.TotalLinesAdded == nil || *snap.TotalLinesAdded != 128 {
 					t.Errorf("TotalLinesAdded = %v", snap.TotalLinesAdded)
 				}
-				if snap.FiveHourUsedPercent == nil || *snap.FiveHourUsedPercent != 42.5 {
-					t.Errorf("FiveHourUsedPercent = %v", snap.FiveHourUsedPercent)
+				fiveHour := findWindow(snap, "five_hour")
+				if fiveHour == nil || fiveHour.UsedPercent == nil || *fiveHour.UsedPercent != 42.5 {
+					t.Errorf("five_hour window = %+v, want used 42.5", fiveHour)
 				}
 				wantReset := time.Date(2026, 7, 12, 18, 0, 0, 0, time.UTC)
-				if snap.FiveHourResetsAt == nil || !snap.FiveHourResetsAt.Equal(wantReset) {
-					t.Errorf("FiveHourResetsAt = %v, want %v", snap.FiveHourResetsAt, wantReset)
+				if fiveHour == nil || fiveHour.ResetsAt == nil || !fiveHour.ResetsAt.Equal(wantReset) {
+					t.Errorf("five_hour ResetsAt = %+v, want %v", fiveHour, wantReset)
 				}
-				if snap.SevenDayUsedPercent == nil || *snap.SevenDayUsedPercent != 11.2 {
-					t.Errorf("SevenDayUsedPercent = %v", snap.SevenDayUsedPercent)
+				sevenDay := findWindow(snap, "seven_day")
+				if sevenDay == nil || sevenDay.UsedPercent == nil || *sevenDay.UsedPercent != 11.2 {
+					t.Errorf("seven_day window = %+v, want used 11.2", sevenDay)
+				}
+				// Windows sort by LimitID for deterministic downstream
+				// iteration (JSON object order is not stable).
+				if len(snap.RateLimitWindows) != 2 || snap.RateLimitWindows[0].LimitID != "five_hour" {
+					t.Errorf("RateLimitWindows = %+v, want [five_hour seven_day]", snap.RateLimitWindows)
 				}
 			},
 		},
@@ -80,9 +98,9 @@ func TestParseStatusLine(t *testing.T) {
 				if snap.TotalCostUSD != nil {
 					t.Errorf("TotalCostUSD = %v, want nil", *snap.TotalCostUSD)
 				}
-				// rate_limits present but empty object -> both windows nil.
-				if snap.FiveHourUsedPercent != nil || snap.FiveHourResetsAt != nil {
-					t.Errorf("expected nil five-hour quota fields, got %v / %v", snap.FiveHourUsedPercent, snap.FiveHourResetsAt)
+				// rate_limits present but empty object -> no windows.
+				if len(snap.RateLimitWindows) != 0 {
+					t.Errorf("RateLimitWindows = %+v, want none", snap.RateLimitWindows)
 				}
 				// context_window_size WAS present (200000) even though other
 				// context fields are null - must still be captured.
@@ -108,6 +126,17 @@ func TestParseStatusLine(t *testing.T) {
 				if snap.ContextUsedPercent == nil || *snap.ContextUsedPercent != 7.95 {
 					t.Errorf("ContextUsedPercent = %v", snap.ContextUsedPercent)
 				}
+				// Issue #21's parser-level pin: the fixture's hypothetical
+				// weekly_fable window (an id this build has never heard
+				// of, with an unknown field inside it) is captured like
+				// any other window.
+				unknown := findWindow(snap, "weekly_fable")
+				if unknown == nil || unknown.UsedPercent == nil || *unknown.UsedPercent != 61.0 {
+					t.Errorf("weekly_fable window = %+v, want used 61.0", unknown)
+				}
+				if len(snap.RateLimitWindows) != 3 {
+					t.Errorf("RateLimitWindows = %d, want 3 (five_hour, seven_day, weekly_fable)", len(snap.RateLimitWindows))
+				}
 			},
 		},
 		{
@@ -117,8 +146,9 @@ func TestParseStatusLine(t *testing.T) {
 				if snap.ContextUsedPercent == nil || *snap.ContextUsedPercent != 98.85 {
 					t.Errorf("ContextUsedPercent = %v", snap.ContextUsedPercent)
 				}
-				if snap.FiveHourUsedPercent == nil || *snap.FiveHourUsedPercent != 97.3 {
-					t.Errorf("FiveHourUsedPercent = %v", snap.FiveHourUsedPercent)
+				fiveHour := findWindow(snap, "five_hour")
+				if fiveHour == nil || fiveHour.UsedPercent == nil || *fiveHour.UsedPercent != 97.3 {
+					t.Errorf("five_hour window = %+v, want used 97.3", fiveHour)
 				}
 				if snap.TotalLinesRemoved == nil || *snap.TotalLinesRemoved != 1876 {
 					t.Errorf("TotalLinesRemoved = %v", snap.TotalLinesRemoved)
@@ -190,14 +220,15 @@ func TestParseStatusLine_ResetsAtEncodings(t *testing.T) {
 			if snap.ModelDisplayName == nil || *snap.ModelDisplayName != "Fable 5" {
 				t.Errorf("ModelDisplayName = %v — the rest of the snapshot must survive", snap.ModelDisplayName)
 			}
-			if snap.FiveHourUsedPercent == nil || *snap.FiveHourUsedPercent != 5.1 {
-				t.Errorf("FiveHourUsedPercent = %v, want 5.1", snap.FiveHourUsedPercent)
+			fiveHour := findWindow(snap, "five_hour")
+			if fiveHour == nil || fiveHour.UsedPercent == nil || *fiveHour.UsedPercent != 5.1 {
+				t.Fatalf("five_hour window = %+v, want used 5.1", fiveHour)
 			}
 			switch {
-			case tc.want == nil && snap.FiveHourResetsAt != nil:
-				t.Errorf("FiveHourResetsAt = %v, want nil (unknown, not an error)", snap.FiveHourResetsAt)
-			case tc.want != nil && (snap.FiveHourResetsAt == nil || !snap.FiveHourResetsAt.Equal(*tc.want)):
-				t.Errorf("FiveHourResetsAt = %v, want %v", snap.FiveHourResetsAt, tc.want)
+			case tc.want == nil && fiveHour.ResetsAt != nil:
+				t.Errorf("ResetsAt = %v, want nil (unknown, not an error)", fiveHour.ResetsAt)
+			case tc.want != nil && (fiveHour.ResetsAt == nil || !fiveHour.ResetsAt.Equal(*tc.want)):
+				t.Errorf("ResetsAt = %v, want %v", fiveHour.ResetsAt, tc.want)
 			}
 		})
 	}
@@ -251,33 +282,57 @@ func TestStatusLineSnapshot_ContextObservation(t *testing.T) {
 
 func TestStatusLineSnapshot_QuotaObservations_NilWhenAbsent(t *testing.T) {
 	snap := StatusLineSnapshot{SessionID: "sess_1"}
-	if obs := snap.FiveHourQuotaObservation(time.Now()); obs != nil {
-		t.Errorf("FiveHourQuotaObservation = %+v, want nil", obs)
-	}
-	if obs := snap.SevenDayQuotaObservation(time.Now()); obs != nil {
-		t.Errorf("SevenDayQuotaObservation = %+v, want nil", obs)
+	if obs := snap.QuotaObservations(time.Now()); obs != nil {
+		t.Errorf("QuotaObservations = %+v, want nil", obs)
 	}
 }
 
-func TestStatusLineSnapshot_QuotaObservations_Present(t *testing.T) {
+func TestStatusLineSnapshot_QuotaObservations_OnePerWindow(t *testing.T) {
 	now := time.Now().UTC()
 	reset := now.Add(2 * time.Hour)
 	snap := StatusLineSnapshot{
-		SessionID:           "sess_1",
-		FiveHourUsedPercent: ptr(42.5),
-		FiveHourResetsAt:    &reset,
+		SessionID: "sess_1",
+		RateLimitWindows: []RateLimitWindow{
+			{LimitID: "five_hour", UsedPercent: ptr(42.5), ResetsAt: &reset},
+			// A window this build has never heard of (issue #21): it
+			// must project like any other, named by its own id, at
+			// medium confidence (one measurement).
+			{LimitID: "weekly_fable", UsedPercent: ptr(61.0)},
+		},
 	}
-	obs := snap.FiveHourQuotaObservation(now)
-	if obs == nil {
-		t.Fatal("expected non-nil observation")
+	obs := snap.QuotaObservations(now)
+	if len(obs) != 2 {
+		t.Fatalf("QuotaObservations = %d, want 2", len(obs))
 	}
-	if obs.LimitID != "five_hour" {
-		t.Errorf("LimitID = %q", obs.LimitID)
+	if obs[0].LimitID != "five_hour" || obs[0].LimitName != "5h rolling usage" {
+		t.Errorf("obs[0] = %q/%q, want five_hour with its friendly name", obs[0].LimitID, obs[0].LimitName)
 	}
-	if obs.Confidence != domain.ConfidenceHigh {
-		t.Errorf("Confidence = %q, want high", obs.Confidence)
+	if obs[0].Confidence != domain.ConfidenceHigh {
+		t.Errorf("obs[0].Confidence = %q, want high (both measurements)", obs[0].Confidence)
 	}
-	if obs.Provider != "claude" {
-		t.Errorf("Provider = %q", obs.Provider)
+	if obs[0].Provider != "claude" {
+		t.Errorf("obs[0].Provider = %q", obs[0].Provider)
+	}
+	if obs[1].LimitID != "weekly_fable" || obs[1].LimitName != "weekly_fable" {
+		t.Errorf("obs[1] = %q/%q, want the unknown id named by itself", obs[1].LimitID, obs[1].LimitName)
+	}
+	if obs[1].Confidence != domain.ConfidenceMedium {
+		t.Errorf("obs[1].Confidence = %q, want medium (one measurement)", obs[1].Confidence)
+	}
+}
+
+func TestStatusLineSnapshot_WeeklyLimitUsedPercent(t *testing.T) {
+	snap := StatusLineSnapshot{
+		SessionID: "sess_1",
+		RateLimitWindows: []RateLimitWindow{
+			{LimitID: "five_hour", UsedPercent: ptr(42.5)},
+			{LimitID: "seven_day", UsedPercent: ptr(11.2)},
+		},
+	}
+	if got := snap.WeeklyLimitUsedPercent(); got == nil || *got != 11.2 {
+		t.Errorf("WeeklyLimitUsedPercent = %v, want 11.2", got)
+	}
+	if got := (StatusLineSnapshot{}).WeeklyLimitUsedPercent(); got != nil {
+		t.Errorf("WeeklyLimitUsedPercent on empty snapshot = %v, want nil", got)
 	}
 }

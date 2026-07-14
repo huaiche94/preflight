@@ -292,7 +292,7 @@ func HandleStatusLineEmitLine(ctx context.Context, deps HookDeps, stdin []byte) 
 		Model:                  model,
 		Card:                   card,
 		ContextUsedPercent:     ctxCurrent,
-		WeeklyLimitUsedPercent: snap.SevenDayUsedPercent,
+		WeeklyLimitUsedPercent: snap.WeeklyLimitUsedPercent(),
 	}), nil
 }
 
