@@ -23,8 +23,14 @@ name: CI
 permissions:
   contents: read
 
+# Version-pinning policy (owner decision, 2026-07-13): every tool version
+# here is EXACT — no "latest", no "1.26.x"/"3.x" floats. A floating spec is
+# how the lint job broke invisibly (golangci-lint-action@v6's "latest"
+# resolved to a go1.24-built v1.64.8 that refused the Go 1.26.5 module).
+# Bump these deliberately, in their own commit, alongside the matching
+# local-toolchain upgrade.
 env:
-  GO_VERSION: "1.26.x"
+  GO_VERSION: "1.26.5" # matches go.mod's go directive
 
 jobs:
   # Format, vet, and lint are OS-invariant (they inspect source text and
@@ -51,10 +57,19 @@ jobs:
         # with go1.24 and refuses to load the config against Go 1.26.5.
         uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.12.2
           # golangci-lint-action runs its own lint step; skip-cache-save
           # avoids double-caching against setup-go's module cache.
           install-mode: binary
+
+      # The fmt/lint steps below call Taskfile targets, so this job needs
+      # the Task runner just like build-and-test does; without it they
+      # die on "task: command not found" before checking anything.
+      - name: Set up Task
+        uses: arduino/setup-task@v2
+        with:
+          version: "3.52.0"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: task fmt
         run: task fmt
@@ -87,7 +102,7 @@ jobs:
       - name: Set up Task
         uses: arduino/setup-task@v2
         with:
-          version: "3.x"
+          version: "3.52.0"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: task build
