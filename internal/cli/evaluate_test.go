@@ -388,7 +388,7 @@ func TestStatusLine_EmitLinePrintsOneCompactLine(t *testing.T) {
 		brand = "\x1b[36max✈" + reset
 		sep   = "\x1b[2m │ " + reset
 	)
-	if want := brand + " Opus 4.1" + sep + "🔮 est P50 8000tok ~$0.02–0.68" + sep + "\x1b[33m⚠ WARN" + reset + "\n"; out.String() != want {
+	if want := brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + "\x1b[33m⚠ WARN" + reset + "\n"; out.String() != want {
 		t.Errorf("emit-line output = %q, want %q", out.String(), want)
 	}
 }

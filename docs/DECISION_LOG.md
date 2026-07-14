@@ -76,6 +76,10 @@ flowchart TD
     D12 ==>|✅ #21+#20 Phase 0 捕捉先| D12A[capture-before-model 紀律<br/>晚一天=一天 unlabeled]
     D12 -.->|✗ #11 校準骨架先| D12B[缺標籤恐返工]
     D12 -.->|✗ #7 daemon 先| D12C[資料飛輪慢幾週]
+
+    D12A --> D13{D-13 statusline 格式 v2}
+    D13 ==>|✅ 白話機率 + weekly 段| D13A[probably 50% < N tokens<br/>去成本段、✓ RUN、◷ weekly limit]
+    D13 -.->|✗ 保留分位數術語| D13B[est P50 Ntok 較難讀]
 ```
 
 ---
@@ -160,6 +164,13 @@ flowchart TD
 - **選項：** ①**#21 + #20 Phase 0 捕捉先（✅）**——capture-before-model 紀律：晚一天記錄就是一天 unlabeled 歷史，#11 校準要分層的正是這些欄位；②#11 校準骨架先（缺標籤恐返工）；③#7 daemon 先（資料飛輪慢幾週）。
 - **首次 E2E 回饋紀錄（2026-07-13）：** owner 的互動 session 仍掛改名前設定（見到舊 `pf✈`、未見預估卡）——結論：hooks 在 session 啟動時快照，改設定需重開 session。卡片觀感回饋延至 owner 實際體驗後（下次 session 結尾再問）。
 - **更正（2026-07-13，同日稍晚）：** 上述歸因不完整——重開 session 後仍見 `pf✈`，追查發現 ADR-045 決定的 `pf✈`→`ax✈` 從未在程式碼落地（`git log -S 'ax✈'` 無任何 commit；改名 commit 只動了文件）。已改 `StatusLineText` 及全部測試並重新部署 `~/.local/bin/auspex`。教訓：ADR 的 Consequences 條列若含程式碼變更，落地 commit 應在同一 PR 或明確開 issue 追蹤，不能只寫在 ADR 裡。
+
+## D-13 — Statusline 格式 v2（issue #31）
+
+- **日期／情境：** 2026-07-14。Owner 首次完整體驗 statusline（#27 修復遙測、#29 加 icon/顏色之後）後直接指定新格式：白話機率、去掉成本區間、加 weekly limit 段、RUN 改綠勾。
+- **決定（owner 指定，未開選項）：** `ax✈ <model> │ 🔮 probably (50%) < N tokens │ <gauge> context worst-case ~N% │ ◷ weekly limit ~N% │ ✓ RUN`。「(50%)」是渲染資料非固定標籤——#11 校準落地後分位數可以收緊而格式不變（owner 明言要機率顆粒度的成長空間）。weekly 段直接取自 live snapshot 的 seven_day 視窗（#27 之後是真資料），與預估卡無關、cold session 也會顯示；著色等 #21 的 binding-constraint policy 給出誠實閾值後再做。
+- **Constitution #2 張力（已知會）：** 「probably」是機率語言，而 P50 目前是未校準規則值。緩解：括號保留分位數本體、卡片表面（additionalContext／`auspex evaluate`）維持完整 "uncalibrated estimate" 標籤；statusline 是最壓縮的表面，可讀性優先是 owner 的取捨。
+- **可逆性：** 高——純 presenter 層字串，測試 byte-exact pin，改回一個 commit。
 
 ---
 

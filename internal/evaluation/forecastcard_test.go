@@ -344,32 +344,43 @@ func TestStatusLineText(t *testing.T) {
 		yellow = "\x1b[33m"
 		red    = "\x1b[31m"
 	)
+	weekly := 31.4
 	cases := []struct {
-		name  string
-		model string
-		card  *evaluation.ForecastCard
-		want  string
+		name   string
+		model  string
+		card   *evaluation.ForecastCard
+		weekly *float64
+		want   string
 	}{
-		{"no model no card", "", nil, brand},
-		{"model only", "Opus 4.1", nil, brand + " Opus 4.1"},
-		{"full", "Opus 4.1", &card,
-			brand + " Opus 4.1" + sep + "🔮 est P50 8000tok ~$0.02–0.68" + sep + yellow + "● ctx P90 ~91% (warn)" + reset + sep + yellow + "⚠ WARN" + reset},
-		{"context without threshold decision", "Opus 4.1", &noThresholdCard,
-			brand + " Opus 4.1" + sep + "🔮 est P50 8000tok ~$0.02–0.68" + sep + green + "● ctx P90 ~91%" + reset + sep + yellow + "⚠ WARN" + reset},
-		{"checkpoint marker outranks warn", "Opus 4.1", &checkpointCard,
-			brand + " Opus 4.1" + sep + "🔮 est P50 8000tok ~$0.02–0.68" + sep + red + "● ctx P90 ~97% (checkpoint)" + reset + sep + yellow + "⚠ WARN" + reset},
+		{"no model no card", "", nil, nil, brand},
+		{"model only", "Opus 4.1", nil, nil, brand + " Opus 4.1"},
+		// D-13: no cost segment on the line; the P50 renders as a
+		// plain-language probability with the quantile in parentheses.
+		{"full", "Opus 4.1", &card, nil,
+			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + yellow + "● context worst-case ~91% (warn)" + reset + sep + yellow + "⚠ WARN" + reset},
+		{"context without threshold decision", "Opus 4.1", &noThresholdCard, nil,
+			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + green + "● context worst-case ~91%" + reset + sep + yellow + "⚠ WARN" + reset},
+		{"checkpoint marker outranks warn", "Opus 4.1", &checkpointCard, nil,
+			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + red + "● context worst-case ~97% (checkpoint)" + reset + sep + yellow + "⚠ WARN" + reset},
+		// The weekly segment is snapshot data, independent of the card:
+		// it renders on a forecast-cold session (uncolored until #21
+		// gives it honest thresholds) and slots before the policy badge.
+		{"weekly limit without card", "Opus 4.1", nil, &weekly,
+			brand + " Opus 4.1" + sep + "◷ weekly limit ~31%"},
+		{"full with weekly", "Opus 4.1", &card, &weekly,
+			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + yellow + "● context worst-case ~91% (warn)" + reset + sep + "◷ weekly limit ~31%" + sep + yellow + "⚠ WARN" + reset},
 	}
 	for _, tc := range cases {
-		if got := evaluation.StatusLineText(tc.model, tc.card); got != tc.want {
+		if got := evaluation.StatusLineText(tc.model, tc.card, tc.weekly); got != tc.want {
 			t.Errorf("%s: StatusLineText = %q, want %q", tc.name, got, tc.want)
 		}
 	}
 
 	// A card without a token forecast contributes only its action —
-	// never "P50 0tok", and an unknown context projection contributes no
-	// "ctx ~0%" segment either (unknown is not zero).
+	// never "probably < 0 tokens", and an unknown context projection
+	// contributes no "context ~0%" segment either (unknown is not zero).
 	coldCard := evaluation.ForecastCard{PolicyAction: app.PolicyRun}
-	if got, want := evaluation.StatusLineText("Sonnet 4", &coldCard), brand+" Sonnet 4"+sep+green+"▶ RUN"+reset; got != want {
+	if got, want := evaluation.StatusLineText("Sonnet 4", &coldCard, nil), brand+" Sonnet 4"+sep+green+"✓ RUN"+reset; got != want {
 		t.Errorf("cold card: StatusLineText = %q, want %q", got, want)
 	}
 }
@@ -379,7 +390,7 @@ func TestStatusLineText(t *testing.T) {
 func TestStatusLineText_ContextGaugeFill(t *testing.T) {
 	for pct, glyph := range map[float64]string{5: "○", 28: "◔", 50: "◑", 75: "◕", 91: "●"} {
 		card := evaluation.ForecastCard{ContextProjectedP90: &pct, PolicyAction: app.PolicyRun}
-		if got := evaluation.StatusLineText("M", &card); !strings.Contains(got, glyph+" ctx") {
+		if got := evaluation.StatusLineText("M", &card, nil); !strings.Contains(got, glyph+" context") {
 			t.Errorf("pct %.0f: line %q missing gauge %q", pct, got, glyph)
 		}
 	}

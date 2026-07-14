@@ -320,26 +320,35 @@ const (
 
 // StatusLineText renders the one-line statusline display (issue #14
 // deliverable 4; resolves issue #12 friction #2's ingest-only gap; icons
-// and semantic colors are issue #29):
+// and semantic colors are issue #29; the plain-language format is the
+// owner's D-13 decision, issue #31):
 //
-//	ax✈ <model> │ 🔮 est P50 <tokens>tok ~$<low>–<high> │ <gauge> ctx P90 ~<pct>% │ <policy badge>
+//	ax✈ <model> │ 🔮 probably (50%) < <n> tokens │ <gauge> context worst-case ~<pct>% │ ◷ weekly limit ~<pct>% │ <policy badge>
 //
 // model may be empty (renders as bare "ax✈") and card may be nil (no
-// persisted evaluation for the session yet — renders model only), so the
-// status bar always has something to show; "est"/"~" mark every number as
-// an estimate, and the full uncalibrated labeling lives on the card
-// surfaces where there is room for it (AdditionalContext, `auspex
-// evaluate`). The ctx segment (ADR-043 increment 2) appears only when a
-// context projection was persisted — an unknown projection contributes
+// persisted evaluation for the session yet), so the status bar always has
+// something to show. "probably (50%)" is plain-language phrasing of the
+// P50 quantile: the percentage is rendered DATA, not a fixed label, so
+// when calibration (#11) can stand behind sharper quantiles the number
+// tightens without a format change — and the parenthetical keeps the
+// quantile visible while the full "uncalibrated estimate" labeling stays
+// on the card surfaces (Constitution #2; D-13 records the tension). The
+// cost range was dropped from the line by the same decision (still on the
+// card / `auspex evaluate`). The context segment (ADR-043 increment 2)
+// appears only when a projection was persisted — unknown contributes
 // nothing rather than a fabricated 0% — and carries the D-08 threshold
-// state ("(warn)"/"(checkpoint)") when the policy engine recorded one:
-// the textual suffixes stay alongside the yellow/red coloring so the
-// signal survives grep and colorblindness alike. No animation by design —
-// the command re-runs only per assistant message (300ms debounce, quiet
-// when idle), so time-based frames would stutter rather than animate.
-// Exported as a package function rather than a method so the nil-card
-// fallback is one code path, not caller-side duplication.
-func StatusLineText(model string, card *ForecastCard) string {
+// state ("(warn)"/"(checkpoint)"): textual suffixes stay alongside the
+// yellow/red coloring so the signal survives grep and colorblindness
+// alike. weeklyLimitUsedPercent is the LIVE seven-day quota window from
+// the current snapshot (real data since #27), independent of the card so
+// it renders even on forecast-cold sessions; it stays uncolored until
+// #21's binding-constraint policy gives it honest thresholds. No
+// animation by design — the command re-runs only per assistant message
+// (300ms debounce, quiet when idle), so time-based frames would stutter
+// rather than animate. Exported as a package function rather than a
+// method so the nil-card fallback is one code path, not caller-side
+// duplication.
+func StatusLineText(model string, card *ForecastCard, weeklyLimitUsedPercent *float64) string {
 	head := ansiCyan + "ax✈" + ansiReset
 	if model != "" {
 		head += " " + model
@@ -347,14 +356,10 @@ func StatusLineText(model string, card *ForecastCard) string {
 	parts := []string{head}
 	if card != nil {
 		if card.TokensP50 != nil {
-			seg := fmt.Sprintf("🔮 est P50 %dtok", *card.TokensP50)
-			if card.Cost != nil {
-				seg += fmt.Sprintf(" ~$%.2f–%.2f", card.Cost.LowUSD, card.Cost.HighUSD)
-			}
-			parts = append(parts, seg)
+			parts = append(parts, fmt.Sprintf("🔮 probably (50%%) < %d tokens", *card.TokensP50))
 		}
 		if card.ContextProjectedP90 != nil {
-			seg := fmt.Sprintf("%s ctx P90 ~%.0f%%", contextGauge(*card.ContextProjectedP90), *card.ContextProjectedP90)
+			seg := fmt.Sprintf("%s context worst-case ~%.0f%%", contextGauge(*card.ContextProjectedP90), *card.ContextProjectedP90)
 			switch {
 			case card.ContextCheckpointThresholdExceeded:
 				seg = ansiRed + seg + " (checkpoint)" + ansiReset
@@ -365,9 +370,12 @@ func StatusLineText(model string, card *ForecastCard) string {
 			}
 			parts = append(parts, seg)
 		}
-		if card.PolicyAction != "" {
-			parts = append(parts, policyBadge(card.PolicyAction))
-		}
+	}
+	if weeklyLimitUsedPercent != nil {
+		parts = append(parts, fmt.Sprintf("◷ weekly limit ~%.0f%%", *weeklyLimitUsedPercent))
+	}
+	if card != nil && card.PolicyAction != "" {
+		parts = append(parts, policyBadge(card.PolicyAction))
 	}
 	return strings.Join(parts, ansiDim+" │ "+ansiReset)
 }
@@ -395,7 +403,7 @@ func contextGauge(pct float64) string {
 func policyBadge(a app.PolicyAction) string {
 	switch a {
 	case app.PolicyRun:
-		return ansiGreen + "▶ " + string(a) + ansiReset
+		return ansiGreen + "✓ " + string(a) + ansiReset
 	case app.PolicyWarn:
 		return ansiYellow + "⚠ " + string(a) + ansiReset
 	case app.PolicyCheckpointAndRun:

@@ -237,20 +237,21 @@ func statusLineIngest(ctx context.Context, deps HookDeps, stdin []byte) (claudep
 // shared implementation, so the two cannot drift) and additionally
 // composes the one-line display text:
 //
-//	ax✈ <model> │ 🔮 est P50 <tokens>tok ~$<low>–<high> │ <policy badge>
+//	ax✈ <model> │ 🔮 probably (50%) < <n> tokens │ ◷ weekly limit ~<pct>% │ <policy badge>
 //
 // using the latest persisted evaluation for the session when one exists
-// (deps.Forecast.LatestForecastCard), else just "ax✈ <model>". Every
-// degradation is fail-open into a shorter line, never an error and never
-// an empty line: malformed stdin renders bare "ax✈", a missing model
-// omits the model segment, a missing/errored card omits the forecast
-// segments — a status line must keep rendering even when Auspex cannot
-// parse its own input (the same ADD §17.5 discipline HandleStatusLine
-// already documents).
+// (deps.Forecast.LatestForecastCard), else just "ax✈ <model>" plus the
+// weekly-limit segment when the snapshot carried one (that segment is
+// live snapshot data, not card data). Every degradation is fail-open into
+// a shorter line, never an error and never an empty line: malformed stdin
+// renders bare "ax✈", a missing model omits the model segment, a
+// missing/errored card omits the forecast segments — a status line must
+// keep rendering even when Auspex cannot parse its own input (the same
+// ADD §17.5 discipline HandleStatusLine already documents).
 func HandleStatusLineEmitLine(ctx context.Context, deps HookDeps, stdin []byte) (StatusLineResult, string, error) {
 	snap, result, parsedOK := statusLineIngest(ctx, deps, stdin)
 	if !parsedOK {
-		return result, evaluation.StatusLineText("", nil), nil
+		return result, evaluation.StatusLineText("", nil, nil), nil
 	}
 
 	model := ""
@@ -270,7 +271,10 @@ func HandleStatusLineEmitLine(ctx context.Context, deps HookDeps, stdin []byte) 
 		// cold start and a card-read failure look identical here by
 		// design; the status bar is no place for an error message.
 	}
-	return result, evaluation.StatusLineText(model, card), nil
+	// The weekly-limit segment comes straight from the live snapshot (the
+	// seven-day window is real observed data since #27), NOT from the
+	// card — it renders even when the session has no forecast yet.
+	return result, evaluation.StatusLineText(model, card, snap.SevenDayUsedPercent), nil
 }
 
 // --- auspex hook claude user-prompt-submit -------------------------------
