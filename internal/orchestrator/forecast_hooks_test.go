@@ -264,8 +264,8 @@ func TestHookHandlers_StatusLineEmitLine_ModelOnlyWhenNoForecast(t *testing.T) {
 		t.Errorf("EventsNormalized = %d, want 4 (ingest identical to HandleStatusLine)", result.EventsNormalized)
 	}
 	// normal.json's model.display_name is "Opus 4.1".
-	if line != "pf✈ Opus 4.1" {
-		t.Errorf("line = %q, want %q", line, "pf✈ Opus 4.1")
+	if line != "ax✈ Opus 4.1" {
+		t.Errorf("line = %q, want %q", line, "ax✈ Opus 4.1")
 	}
 }
 
@@ -278,7 +278,7 @@ func TestHookHandlers_StatusLineEmitLine_WithLatestForecast(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HandleStatusLineEmitLine: %v", err)
 	}
-	if want := "pf✈ Opus 4.1 | est P50 8000tok ~$0.02–0.68 | WARN"; line != want {
+	if want := "ax✈ Opus 4.1 | est P50 8000tok ~$0.02–0.68 | WARN"; line != want {
 		t.Errorf("line = %q, want %q", line, want)
 	}
 	if forecast.gotSessionID == "" {
@@ -297,7 +297,7 @@ func TestHookHandlers_StatusLineEmitLine_ColdStartAndErrorDegradeToModelOnly(t *
 		if err != nil {
 			t.Fatalf("%s: HandleStatusLineEmitLine: %v", name, err)
 		}
-		if line != "pf✈ Opus 4.1" {
+		if line != "ax✈ Opus 4.1" {
 			t.Errorf("%s: line = %q, want model-only fallback", name, line)
 		}
 	}
@@ -312,8 +312,8 @@ func TestHookHandlers_StatusLineEmitLine_MalformedInputStillEmitsLine(t *testing
 	if result.EventsNormalized != 0 {
 		t.Errorf("EventsNormalized = %d, want 0", result.EventsNormalized)
 	}
-	if line != "pf✈" {
-		t.Errorf("line = %q, want the bare fallback %q — a status line must keep rendering", line, "pf✈")
+	if line != "ax✈" {
+		t.Errorf("line = %q, want the bare fallback %q — a status line must keep rendering", line, "ax✈")
 	}
 }
 

@@ -339,11 +339,11 @@ func TestStatusLineText(t *testing.T) {
 		card  *evaluation.ForecastCard
 		want  string
 	}{
-		{"no model no card", "", nil, "pf✈"},
-		{"model only", "Opus 4.1", nil, "pf✈ Opus 4.1"},
-		{"full", "Opus 4.1", &card, "pf✈ Opus 4.1 | est P50 8000tok ~$0.02–0.68 | ctx P90 ~91% (warn) | WARN"},
-		{"context without threshold decision", "Opus 4.1", &noThresholdCard, "pf✈ Opus 4.1 | est P50 8000tok ~$0.02–0.68 | ctx P90 ~91% | WARN"},
-		{"checkpoint marker outranks warn", "Opus 4.1", &checkpointCard, "pf✈ Opus 4.1 | est P50 8000tok ~$0.02–0.68 | ctx P90 ~97% (checkpoint) | WARN"},
+		{"no model no card", "", nil, "ax✈"},
+		{"model only", "Opus 4.1", nil, "ax✈ Opus 4.1"},
+		{"full", "Opus 4.1", &card, "ax✈ Opus 4.1 | est P50 8000tok ~$0.02–0.68 | ctx P90 ~91% (warn) | WARN"},
+		{"context without threshold decision", "Opus 4.1", &noThresholdCard, "ax✈ Opus 4.1 | est P50 8000tok ~$0.02–0.68 | ctx P90 ~91% | WARN"},
+		{"checkpoint marker outranks warn", "Opus 4.1", &checkpointCard, "ax✈ Opus 4.1 | est P50 8000tok ~$0.02–0.68 | ctx P90 ~97% (checkpoint) | WARN"},
 	}
 	for _, tc := range cases {
 		if got := evaluation.StatusLineText(tc.model, tc.card); got != tc.want {
@@ -355,7 +355,7 @@ func TestStatusLineText(t *testing.T) {
 	// never "P50 0tok", and an unknown context projection contributes no
 	// "ctx ~0%" segment either (unknown is not zero).
 	coldCard := evaluation.ForecastCard{PolicyAction: app.PolicyRun}
-	if got, want := evaluation.StatusLineText("Sonnet 4", &coldCard), "pf✈ Sonnet 4 | RUN"; got != want {
+	if got, want := evaluation.StatusLineText("Sonnet 4", &coldCard), "ax✈ Sonnet 4 | RUN"; got != want {
 		t.Errorf("cold card: StatusLineText = %q, want %q", got, want)
 	}
 }
