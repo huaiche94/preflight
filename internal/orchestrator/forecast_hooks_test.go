@@ -247,8 +247,8 @@ func TestHookHandlers_HighContextCardRendersThresholdState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HandleStatusLineEmitLine: %v", err)
 	}
-	if !strings.Contains(line, "context worst-case ~91% (warn)") {
-		t.Errorf("emit-line = %q, want the context segment with the warn marker", line)
+	if !strings.Contains(line, "context worst-case [██████████████████··] ~91% (warn)") {
+		t.Errorf("emit-line = %q, want the context segment with bar and warn marker", line)
 	}
 }
 
@@ -276,8 +276,12 @@ func TestHookHandlers_StatusLineEmitLine_ModelOnlyWhenNoForecast(t *testing.T) {
 // cannot rewrite its own expectations.
 const (
 	statusReset = "\x1b[0m"
+	statusDim   = "\x1b[2m"
 	statusBrand = "\x1b[36max✈" + statusReset
-	statusSep   = "\x1b[2m │ " + statusReset
+	statusSep   = statusDim + " │ " + statusReset
+	// D-13 v2.1: the policy segment renders the whole severity scale
+	// with the active step lit and the rest dimmed.
+	statusScaleWarn = statusDim + "RUN" + statusReset + "  \x1b[33m⚠ WARN" + statusReset + "  " + statusDim + "CHECKPOINT_AND_RUN" + statusReset + "  " + statusDim + "BLOCK" + statusReset
 )
 
 func TestHookHandlers_StatusLineEmitLine_WithLatestForecast(t *testing.T) {
@@ -289,7 +293,7 @@ func TestHookHandlers_StatusLineEmitLine_WithLatestForecast(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HandleStatusLineEmitLine: %v", err)
 	}
-	if want := statusBrand + " Opus 4.1" + statusSep + "🔮 probably (50%) < 8000 tokens" + statusSep + "◷ weekly limit ~11%" + statusSep + "\x1b[33m⚠ WARN" + statusReset; line != want {
+	if want := statusBrand + " Opus 4.1" + statusSep + "🔮 probably (50%) < 8000 tokens" + statusSep + "◷ weekly limit ~11%" + statusSep + statusScaleWarn; line != want {
 		t.Errorf("line = %q, want %q", line, want)
 	}
 	if forecast.gotSessionID == "" {

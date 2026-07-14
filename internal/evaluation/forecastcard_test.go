@@ -338,11 +338,19 @@ func TestStatusLineText(t *testing.T) {
 	// renderer regression cannot rewrite its own expectations.
 	const (
 		reset  = "\x1b[0m"
+		dim    = "\x1b[2m"
 		brand  = "\x1b[36max✈" + reset // cyan
-		sep    = "\x1b[2m │ " + reset  // dim separator
+		sep    = dim + " │ " + reset   // dim separator
 		green  = "\x1b[32m"
 		yellow = "\x1b[33m"
 		red    = "\x1b[31m"
+		// D-13 v2.1: the policy segment shows the WHOLE severity scale,
+		// active step lit, the rest dimmed.
+		scaleRun  = green + "✓ RUN" + reset + "  " + dim + "WARN" + reset + "  " + dim + "CHECKPOINT_AND_RUN" + reset + "  " + dim + "BLOCK" + reset
+		scaleWarn = dim + "RUN" + reset + "  " + yellow + "⚠ WARN" + reset + "  " + dim + "CHECKPOINT_AND_RUN" + reset + "  " + dim + "BLOCK" + reset
+		// 20-cell bars: 91% → 18 filled, 97% → 19 filled.
+		bar91 = "[██████████████████··]"
+		bar97 = "[███████████████████·]"
 	)
 	weekly := 31.4
 	cases := []struct {
@@ -357,18 +365,18 @@ func TestStatusLineText(t *testing.T) {
 		// D-13: no cost segment on the line; the P50 renders as a
 		// plain-language probability with the quantile in parentheses.
 		{"full", "Opus 4.1", &card, nil,
-			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + yellow + "● context worst-case ~91% (warn)" + reset + sep + yellow + "⚠ WARN" + reset},
+			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + yellow + "context worst-case " + bar91 + " ~91% (warn)" + reset + sep + scaleWarn},
 		{"context without threshold decision", "Opus 4.1", &noThresholdCard, nil,
-			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + green + "● context worst-case ~91%" + reset + sep + yellow + "⚠ WARN" + reset},
+			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + green + "context worst-case " + bar91 + " ~91%" + reset + sep + scaleWarn},
 		{"checkpoint marker outranks warn", "Opus 4.1", &checkpointCard, nil,
-			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + red + "● context worst-case ~97% (checkpoint)" + reset + sep + yellow + "⚠ WARN" + reset},
+			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + red + "context worst-case " + bar97 + " ~97% (checkpoint)" + reset + sep + scaleWarn},
 		// The weekly segment is snapshot data, independent of the card:
 		// it renders on a forecast-cold session (uncolored until #21
-		// gives it honest thresholds) and slots before the policy badge.
+		// gives it honest thresholds) and slots before the policy scale.
 		{"weekly limit without card", "Opus 4.1", nil, &weekly,
 			brand + " Opus 4.1" + sep + "◷ weekly limit ~31%"},
 		{"full with weekly", "Opus 4.1", &card, &weekly,
-			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + yellow + "● context worst-case ~91% (warn)" + reset + sep + "◷ weekly limit ~31%" + sep + yellow + "⚠ WARN" + reset},
+			brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + yellow + "context worst-case " + bar91 + " ~91% (warn)" + reset + sep + "◷ weekly limit ~31%" + sep + scaleWarn},
 	}
 	for _, tc := range cases {
 		if got := evaluation.StatusLineText(tc.model, tc.card, tc.weekly); got != tc.want {
@@ -380,18 +388,34 @@ func TestStatusLineText(t *testing.T) {
 	// never "probably < 0 tokens", and an unknown context projection
 	// contributes no "context ~0%" segment either (unknown is not zero).
 	coldCard := evaluation.ForecastCard{PolicyAction: app.PolicyRun}
-	if got, want := evaluation.StatusLineText("Sonnet 4", &coldCard, nil), brand+" Sonnet 4"+sep+green+"✓ RUN"+reset; got != want {
+	if got, want := evaluation.StatusLineText("Sonnet 4", &coldCard, nil), brand+" Sonnet 4"+sep+scaleRun; got != want {
 		t.Errorf("cold card: StatusLineText = %q, want %q", got, want)
+	}
+
+	// An action outside the known scale renders alone as its raw string —
+	// never dropped, never mislabeled as a step on the scale.
+	unknownCard := evaluation.ForecastCard{PolicyAction: app.PolicyAction("FUTURE_ACTION")}
+	if got, want := evaluation.StatusLineText("Sonnet 4", &unknownCard, nil), brand+" Sonnet 4"+sep+"FUTURE_ACTION"; got != want {
+		t.Errorf("unknown action: StatusLineText = %q, want %q", got, want)
 	}
 }
 
-// TestStatusLineText_ContextGaugeFill: the gauge glyph tracks the
-// projected percentage so the segment reads at a glance (issue #29).
-func TestStatusLineText_ContextGaugeFill(t *testing.T) {
-	for pct, glyph := range map[float64]string{5: "○", 28: "◔", 50: "◑", 75: "◕", 91: "●"} {
+// TestStatusLineText_ContextBarFill: the 20-cell bar tracks the projected
+// percentage — one cell per 5%, rounded (D-13 v2.1) — and clamps rather
+// than overflowing on out-of-range projections.
+func TestStatusLineText_ContextBarFill(t *testing.T) {
+	for pct, bar := range map[float64]string{
+		0:   "[····················]",
+		5:   "[█···················]",
+		32:  "[██████··············]",
+		50:  "[██████████··········]",
+		91:  "[██████████████████··]",
+		100: "[████████████████████]",
+		130: "[████████████████████]", // clamped, never overflows
+	} {
 		card := evaluation.ForecastCard{ContextProjectedP90: &pct, PolicyAction: app.PolicyRun}
-		if got := evaluation.StatusLineText("M", &card, nil); !strings.Contains(got, glyph+" context") {
-			t.Errorf("pct %.0f: line %q missing gauge %q", pct, got, glyph)
+		if got := evaluation.StatusLineText("M", &card, nil); !strings.Contains(got, "context worst-case "+bar+" ") {
+			t.Errorf("pct %.0f: line %q missing bar %q", pct, got, bar)
 		}
 	}
 }

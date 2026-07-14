@@ -147,7 +147,7 @@ func TestEvaluateTurn_WarmedForecaster_CheckpointThresholdFires(t *testing.T) {
 	if ac := card.AdditionalContext(); !strings.Contains(ac, "context: P90 ~97% of window (projected) — CHECKPOINT threshold exceeded") {
 		t.Errorf("AdditionalContext missing the threshold state:\n%s", ac)
 	}
-	if line := evaluation.StatusLineText("Opus 4.1", &card, nil); !strings.Contains(line, "context worst-case ~97% (checkpoint)") {
+	if line := evaluation.StatusLineText("Opus 4.1", &card, nil); !strings.Contains(line, "context worst-case [███████████████████·] ~97% (checkpoint)") {
 		t.Errorf("StatusLineText missing the context segment: %q", line)
 	}
 }

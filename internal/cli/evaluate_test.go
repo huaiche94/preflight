@@ -388,7 +388,8 @@ func TestStatusLine_EmitLinePrintsOneCompactLine(t *testing.T) {
 		brand = "\x1b[36max✈" + reset
 		sep   = "\x1b[2m │ " + reset
 	)
-	if want := brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + "\x1b[33m⚠ WARN" + reset + "\n"; out.String() != want {
+	scaleWarn := "\x1b[2mRUN" + reset + "  \x1b[33m⚠ WARN" + reset + "  \x1b[2mCHECKPOINT_AND_RUN" + reset + "  \x1b[2mBLOCK" + reset
+	if want := brand + " Opus 4.1" + sep + "🔮 probably (50%) < 8000 tokens" + sep + scaleWarn + "\n"; out.String() != want {
 		t.Errorf("emit-line output = %q, want %q", out.String(), want)
 	}
 }

@@ -168,7 +168,7 @@ flowchart TD
 ## D-13 — Statusline 格式 v2（issue #31）
 
 - **日期／情境：** 2026-07-14。Owner 首次完整體驗 statusline（#27 修復遙測、#29 加 icon/顏色之後）後直接指定新格式：白話機率、去掉成本區間、加 weekly limit 段、RUN 改綠勾。
-- **決定（owner 指定，未開選項）：** `ax✈ <model> │ 🔮 probably (50%) < N tokens │ <gauge> context worst-case ~N% │ ◷ weekly limit ~N% │ ✓ RUN`。「(50%)」是渲染資料非固定標籤——#11 校準落地後分位數可以收緊而格式不變（owner 明言要機率顆粒度的成長空間）。weekly 段直接取自 live snapshot 的 seven_day 視窗（#27 之後是真資料），與預估卡無關、cold session 也會顯示；著色等 #21 的 binding-constraint policy 給出誠實閾值後再做。
+- **決定（owner 指定，未開選項）：** `ax✈ <model> │ 🔮 probably (50%) < N tokens │ context worst-case [██████··············] ~N% │ ◷ weekly limit ~N% │ ✓ RUN  WARN  CHECKPOINT_AND_RUN  BLOCK`。v2.1（owner 看過 v2 實機後追加）：context 段改用 20 格進度條（每格 5%，取代圓形量表）；policy 段顯示完整嚴重度量表——當前狀態亮色＋icon、其餘暗色，first-time user 不用先知道量表全貌就能讀懂位置；量表外的未知 action 單獨原樣顯示，不冒充量表成員。「(50%)」是渲染資料非固定標籤——#11 校準落地後分位數可以收緊而格式不變（owner 明言要機率顆粒度的成長空間）。weekly 段直接取自 live snapshot 的 seven_day 視窗（#27 之後是真資料），與預估卡無關、cold session 也會顯示；著色等 #21 的 binding-constraint policy 給出誠實閾值後再做。
 - **Constitution #2 張力（已知會）：** 「probably」是機率語言，而 P50 目前是未校準規則值。緩解：括號保留分位數本體、卡片表面（additionalContext／`auspex evaluate`）維持完整 "uncalibrated estimate" 標籤；statusline 是最壓縮的表面，可讀性優先是 owner 的取捨。
 - **可逆性：** 高——純 presenter 層字串，測試 byte-exact pin，改回一個 commit。
 

@@ -39,6 +39,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -323,7 +324,7 @@ const (
 // and semantic colors are issue #29; the plain-language format is the
 // owner's D-13 decision, issue #31):
 //
-//	ax✈ <model> │ 🔮 probably (50%) < <n> tokens │ <gauge> context worst-case ~<pct>% │ ◷ weekly limit ~<pct>% │ <policy badge>
+//	ax✈ <model> │ 🔮 probably (50%) < <n> tokens │ context worst-case [<bar>] ~<pct>% │ ◷ weekly limit ~<pct>% │ <policy scale>
 //
 // model may be empty (renders as bare "ax✈") and card may be nil (no
 // persisted evaluation for the session yet), so the status bar always has
@@ -359,7 +360,7 @@ func StatusLineText(model string, card *ForecastCard, weeklyLimitUsedPercent *fl
 			parts = append(parts, fmt.Sprintf("🔮 probably (50%%) < %d tokens", *card.TokensP50))
 		}
 		if card.ContextProjectedP90 != nil {
-			seg := fmt.Sprintf("%s context worst-case ~%.0f%%", contextGauge(*card.ContextProjectedP90), *card.ContextProjectedP90)
+			seg := fmt.Sprintf("context worst-case %s ~%.0f%%", contextBar(*card.ContextProjectedP90), *card.ContextProjectedP90)
 			switch {
 			case card.ContextCheckpointThresholdExceeded:
 				seg = ansiRed + seg + " (checkpoint)" + ansiReset
@@ -375,44 +376,61 @@ func StatusLineText(model string, card *ForecastCard, weeklyLimitUsedPercent *fl
 		parts = append(parts, fmt.Sprintf("◷ weekly limit ~%.0f%%", *weeklyLimitUsedPercent))
 	}
 	if card != nil && card.PolicyAction != "" {
-		parts = append(parts, policyBadge(card.PolicyAction))
+		parts = append(parts, policyScale(card.PolicyAction))
 	}
 	return strings.Join(parts, ansiDim+" │ "+ansiReset)
 }
 
-// contextGauge maps a projected used-percent onto a filling circle so the
-// context segment reads at a glance without parsing the number.
-func contextGauge(pct float64) string {
-	switch {
-	case pct < 12.5:
-		return "○"
-	case pct < 37.5:
-		return "◔"
-	case pct < 62.5:
-		return "◑"
-	case pct < 87.5:
-		return "◕"
-	default:
-		return "●"
+// contextBar renders the projected worst-case usage as a 20-cell bar
+// (one cell per 5%), e.g. [██████··············] — D-13 v2.1: the bar
+// makes the runway legible without parsing the number.
+func contextBar(pct float64) string {
+	const cells = 20
+	filled := int(math.Round(pct / 100 * cells))
+	if filled < 0 {
+		filled = 0
 	}
+	if filled > cells {
+		filled = cells
+	}
+	return "[" + strings.Repeat("█", filled) + strings.Repeat("·", cells-filled) + "]"
 }
 
-// policyBadge renders the policy action with a glyph and color so the most
-// consequential signal on the line is also the most visible one. An action
-// this switch doesn't know renders as its raw string — never dropped.
-func policyBadge(a app.PolicyAction) string {
-	switch a {
-	case app.PolicyRun:
-		return ansiGreen + "✓ " + string(a) + ansiReset
-	case app.PolicyWarn:
-		return ansiYellow + "⚠ " + string(a) + ansiReset
-	case app.PolicyCheckpointAndRun:
-		return ansiMagenta + "⚑ " + string(a) + ansiReset
-	case app.PolicyBlock:
-		return ansiRed + "✖ " + string(a) + ansiReset
-	default:
-		return string(a)
+// policyScale renders ALL four policy actions in severity order with the
+// active one lit (icon + color) and the rest dimmed — a first-time user
+// sees where the current decision sits on the scale, not just a word
+// (D-13 v2.1). An action outside the known scale renders alone as its
+// raw string — never dropped, never mislabeled as part of the scale.
+func policyScale(active app.PolicyAction) string {
+	scale := []struct {
+		action app.PolicyAction
+		icon   string
+		color  string
+	}{
+		{app.PolicyRun, "✓", ansiGreen},
+		{app.PolicyWarn, "⚠", ansiYellow},
+		{app.PolicyCheckpointAndRun, "⚑", ansiMagenta},
+		{app.PolicyBlock, "✖", ansiRed},
 	}
+	known := false
+	for _, s := range scale {
+		if s.action == active {
+			known = true
+			break
+		}
+	}
+	if !known {
+		return string(active)
+	}
+	parts := make([]string, 0, len(scale))
+	for _, s := range scale {
+		if s.action == active {
+			parts = append(parts, s.color+s.icon+" "+string(s.action)+ansiReset)
+		} else {
+			parts = append(parts, ansiDim+string(s.action)+ansiReset)
+		}
+	}
+	return strings.Join(parts, "  ")
 }
 
 func (c ForecastCard) labelText() string {

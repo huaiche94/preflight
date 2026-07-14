@@ -237,7 +237,7 @@ func statusLineIngest(ctx context.Context, deps HookDeps, stdin []byte) (claudep
 // shared implementation, so the two cannot drift) and additionally
 // composes the one-line display text:
 //
-//	ax✈ <model> │ 🔮 probably (50%) < <n> tokens │ ◷ weekly limit ~<pct>% │ <policy badge>
+//	ax✈ <model> │ 🔮 probably (50%) < <n> tokens │ context worst-case [<bar>] ~<pct>% │ ◷ weekly limit ~<pct>% │ <policy scale>
 //
 // using the latest persisted evaluation for the session when one exists
 // (deps.Forecast.LatestForecastCard), else just "ax✈ <model>" plus the
