@@ -31,6 +31,11 @@
     "seven_day": {
       "used_percentage": 2.0,
       "resets_at": 1784332800
+    },
+    "weekly_fable": {
+      "used_percentage": 61.0,
+      "resets_at": 1784332800,
+      "some_future_window_field": true
     }
   },
   "some_future_top_level_field": {

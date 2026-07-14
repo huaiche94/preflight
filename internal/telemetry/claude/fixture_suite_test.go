@@ -228,8 +228,14 @@ func TestFixtureSuite(t *testing.T) {
 				if err != nil {
 					t.Fatalf("ParseStatusLine: %v", err)
 				}
-				if snap.FiveHourUsedPercent == nil || *snap.FiveHourUsedPercent < 90 {
-					t.Fatalf("high_usage.json fixture must model near-quota-limit five-hour usage, got %v", snap.FiveHourUsedPercent)
+				var fiveHour *claudeprovider.RateLimitWindow
+				for i := range snap.RateLimitWindows {
+					if snap.RateLimitWindows[i].LimitID == "five_hour" {
+						fiveHour = &snap.RateLimitWindows[i]
+					}
+				}
+				if fiveHour == nil || fiveHour.UsedPercent == nil || *fiveHour.UsedPercent < 90 {
+					t.Fatalf("high_usage.json fixture must model near-quota-limit five-hour usage, got %+v", fiveHour)
 				}
 				return n.NormalizeStatusLine(snap, clock.Now())
 			},
@@ -252,10 +258,15 @@ func TestFixtureSuite(t *testing.T) {
 				}
 				return n.NormalizeStatusLine(snap, clock.Now())
 			},
-			wantEventCount: 4,
+			// The fixture's rate_limits carries a hypothetical
+			// weekly_fable window this build has never heard of — issue
+			// #21's pin: an unknown window becomes a quota event like
+			// any other, the day it appears on the wire.
+			wantEventCount: 5,
 			wantEventTypes: []v1.EventType{
 				v1.EventProviderContextObserved,
 				v1.EventProviderUsageObserved,
+				v1.EventProviderQuotaObserved,
 				v1.EventProviderQuotaObserved,
 				v1.EventProviderQuotaObserved,
 			},

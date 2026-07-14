@@ -84,9 +84,11 @@ func digestKey(parts ...string) string {
 
 // NormalizeStatusLine projects a StatusLineSnapshot into zero or more
 // usage/quota/context observation events. A snapshot can carry context
-// usage, a cumulative usage/cost figure, and up to two rolling quota
-// windows (five-hour, seven-day) simultaneously — each becomes its own
-// Event because pkg/protocol/v1.EventType distinguishes them
+// usage, a cumulative usage/cost figure, and ANY number of rolling quota
+// windows (five_hour and seven_day today; issue #21 made the set open so
+// a window the provider adds is ingested the day it appears) — each
+// becomes its own Event because pkg/protocol/v1.EventType distinguishes
+// them
 // (EventProviderContextObserved, EventProviderUsageObserved,
 // EventProviderQuotaObserved), and CONTRACT_FREEZE.md's "unknown is not
 // zero" rule means an absent measurement must not be synthesized into an
@@ -103,11 +105,10 @@ func (n *Normalizer) NormalizeStatusLine(snap claudeprovider.StatusLineSnapshot,
 	if ev, ok := n.usageEvent(snap, observedAt); ok {
 		events = append(events, ev)
 	}
-	if ev, ok := n.quotaEvent(snap, observedAt, "five_hour", snap.FiveHourUsedPercent, snap.FiveHourResetsAt); ok {
-		events = append(events, ev)
-	}
-	if ev, ok := n.quotaEvent(snap, observedAt, "seven_day", snap.SevenDayUsedPercent, snap.SevenDayResetsAt); ok {
-		events = append(events, ev)
+	for _, w := range snap.RateLimitWindows {
+		if ev, ok := n.quotaEvent(snap, observedAt, w.LimitID, w.UsedPercent, w.ResetsAt); ok {
+			events = append(events, ev)
+		}
 	}
 
 	return events

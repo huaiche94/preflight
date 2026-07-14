@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"time"
 
 	"github.com/huaiche94/auspex/internal/domain"
@@ -42,13 +43,23 @@ type StatusLineSnapshot struct {
 	TotalLinesAdded    *int64
 	TotalLinesRemoved  *int64
 
-	// Five-hour rolling quota window.
-	FiveHourUsedPercent *float64
-	FiveHourResetsAt    *time.Time
+	// RateLimitWindows carries EVERY rate-limit window present in the
+	// payload, sorted by LimitID (JSON object order is not stable).
+	// Issue #21: the previous shape hardcoded five_hour/seven_day fields
+	// and silently dropped anything else — a window the provider adds
+	// (e.g. a per-model weekly limit) must be ingested the day it
+	// appears, with no parser change.
+	RateLimitWindows []RateLimitWindow
+}
 
-	// Seven-day rolling quota window.
-	SevenDayUsedPercent *float64
-	SevenDayResetsAt    *time.Time
+// RateLimitWindow is one rolling quota window from the payload's
+// rate_limits object. LimitID is the payload's own key (five_hour,
+// seven_day, whatever arrives next); both measurements follow the
+// nil-means-unknown rule.
+type RateLimitWindow struct {
+	LimitID     string
+	UsedPercent *float64
+	ResetsAt    *time.Time
 }
 
 // rawStatusLine mirrors the on-wire JSON shape. Using `any`/pointer leaves
@@ -84,10 +95,7 @@ type rawStatusLine struct {
 		TotalLinesRemoved  *int64   `json:"total_lines_removed"`
 	} `json:"cost"`
 
-	RateLimits *struct {
-		FiveHour *rawRateWindow `json:"five_hour"`
-		SevenDay *rawRateWindow `json:"seven_day"`
-	} `json:"rate_limits"`
+	RateLimits map[string]*rawRateWindow `json:"rate_limits"`
 }
 
 type rawRateWindow struct {
@@ -195,16 +203,26 @@ func ParseStatusLine(raw []byte) (StatusLineSnapshot, error) {
 		snap.TotalLinesRemoved = r.Cost.TotalLinesRemoved
 	}
 
-	if r.RateLimits != nil {
-		if r.RateLimits.FiveHour != nil {
-			snap.FiveHourUsedPercent = r.RateLimits.FiveHour.UsedPercentage
-			snap.FiveHourResetsAt = r.RateLimits.FiveHour.ResetsAt.timePtr()
+	for limitID, w := range r.RateLimits {
+		if w == nil {
+			continue
 		}
-		if r.RateLimits.SevenDay != nil {
-			snap.SevenDayUsedPercent = r.RateLimits.SevenDay.UsedPercentage
-			snap.SevenDayResetsAt = r.RateLimits.SevenDay.ResetsAt.timePtr()
+		usedPercent := w.UsedPercentage
+		resetsAt := w.ResetsAt.timePtr()
+		if usedPercent == nil && resetsAt == nil {
+			// A window that measured nothing observes nothing (ADD
+			// §22.10: absence means unknown, not zero usage).
+			continue
 		}
+		snap.RateLimitWindows = append(snap.RateLimitWindows, RateLimitWindow{
+			LimitID:     limitID,
+			UsedPercent: usedPercent,
+			ResetsAt:    resetsAt,
+		})
 	}
+	sort.Slice(snap.RateLimitWindows, func(i, j int) bool {
+		return snap.RateLimitWindows[i].LimitID < snap.RateLimitWindows[j].LimitID
+	})
 
 	return snap, nil
 }
@@ -240,50 +258,58 @@ func (s StatusLineSnapshot) ContextObservation(observedAt time.Time) domain.Cont
 	}
 }
 
-// FiveHourQuotaObservation projects the five-hour rolling quota window into
-// the frozen domain.QuotaObservation shape. Returns nil when neither
-// percentage nor reset timestamp was observed (ADD §22.10: absence means
-// unknown, not zero usage).
-func (s StatusLineSnapshot) FiveHourQuotaObservation(observedAt time.Time) *domain.QuotaObservation {
-	if s.FiveHourUsedPercent == nil && s.FiveHourResetsAt == nil {
-		return nil
-	}
-	confidence := domain.ConfidenceHigh
-	if s.FiveHourUsedPercent == nil || s.FiveHourResetsAt == nil {
-		confidence = domain.ConfidenceMedium
-	}
-	return &domain.QuotaObservation{
-		SessionID:   s.SessionID,
-		Provider:    "claude",
-		LimitID:     "five_hour",
-		LimitName:   "5h rolling usage",
-		UsedPercent: s.FiveHourUsedPercent,
-		ResetsAt:    s.FiveHourResetsAt,
-		Source:      domain.SourceStatusLine,
-		Confidence:  confidence,
-		ObservedAt:  observedAt,
-	}
+// quotaLimitNames maps known limit ids to their human-readable names; an
+// id outside this map renders as itself — a new window arriving on the
+// wire must never be dropped or mislabeled while waiting for a name.
+var quotaLimitNames = map[string]string{
+	"five_hour": "5h rolling usage",
+	"seven_day": "7d rolling usage",
 }
 
-// SevenDayQuotaObservation is the seven-day analogue of
-// FiveHourQuotaObservation.
-func (s StatusLineSnapshot) SevenDayQuotaObservation(observedAt time.Time) *domain.QuotaObservation {
-	if s.SevenDayUsedPercent == nil && s.SevenDayResetsAt == nil {
+// QuotaObservations projects every captured rate-limit window into the
+// frozen domain.QuotaObservation shape (issue #21: one observation per
+// window, however many arrive). Windows that measured nothing were
+// already skipped at parse time (ADD §22.10: absence means unknown, not
+// zero usage). Confidence follows the per-window field completeness rule
+// the old fixed-window methods used: high with both measurements, medium
+// with one.
+func (s StatusLineSnapshot) QuotaObservations(observedAt time.Time) []domain.QuotaObservation {
+	if len(s.RateLimitWindows) == 0 {
 		return nil
 	}
-	confidence := domain.ConfidenceHigh
-	if s.SevenDayUsedPercent == nil || s.SevenDayResetsAt == nil {
-		confidence = domain.ConfidenceMedium
+	out := make([]domain.QuotaObservation, 0, len(s.RateLimitWindows))
+	for _, w := range s.RateLimitWindows {
+		confidence := domain.ConfidenceHigh
+		if w.UsedPercent == nil || w.ResetsAt == nil {
+			confidence = domain.ConfidenceMedium
+		}
+		name := quotaLimitNames[w.LimitID]
+		if name == "" {
+			name = w.LimitID
+		}
+		out = append(out, domain.QuotaObservation{
+			SessionID:   s.SessionID,
+			Provider:    "claude",
+			LimitID:     w.LimitID,
+			LimitName:   name,
+			UsedPercent: w.UsedPercent,
+			ResetsAt:    w.ResetsAt,
+			Source:      domain.SourceStatusLine,
+			Confidence:  confidence,
+			ObservedAt:  observedAt,
+		})
 	}
-	return &domain.QuotaObservation{
-		SessionID:   s.SessionID,
-		Provider:    "claude",
-		LimitID:     "seven_day",
-		LimitName:   "7d rolling usage",
-		UsedPercent: s.SevenDayUsedPercent,
-		ResetsAt:    s.SevenDayResetsAt,
-		Source:      domain.SourceStatusLine,
-		Confidence:  confidence,
-		ObservedAt:  observedAt,
+	return out
+}
+
+// WeeklyLimitUsedPercent returns the seven_day window's used percentage,
+// or nil when that window was not observed — the statusline's weekly
+// segment reads this without caring how many other windows exist.
+func (s StatusLineSnapshot) WeeklyLimitUsedPercent() *float64 {
+	for _, w := range s.RateLimitWindows {
+		if w.LimitID == "seven_day" {
+			return w.UsedPercent
+		}
 	}
+	return nil
 }
