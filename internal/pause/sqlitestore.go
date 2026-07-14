@@ -481,19 +481,6 @@ func indexOf(s, substr string) int {
 // enum value today, or WakeJobID, an ID-generator-produced string) —
 // sufficient for this hand-rolled encoding's own fixed, narrow field set,
 // not a general JSON string escaper.
-func jsonEscape(s string) string {
-	out := make([]byte, 0, len(s))
-	for i := 0; i < len(s); i++ {
-		switch s[i] {
-		case '"', '\\':
-			out = append(out, '\\', s[i])
-		default:
-			out = append(out, s[i])
-		}
-	}
-	return string(out)
-}
-
 func jsonUnescape(s string) string {
 	out := make([]byte, 0, len(s))
 	for i := 0; i < len(s); i++ {

@@ -19,6 +19,7 @@ package daemon_test
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -240,7 +241,7 @@ func TestDaemonWorker_ExecutesScheduledWakeUnattended(t *testing.T) {
 		}
 	}
 	cancelWorker()
-	if err := <-done; err != nil && err != context.Canceled {
+	if err := <-done; err != nil && !errors.Is(err, context.Canceled) {
 		t.Fatalf("worker.Run: %v", err)
 	}
 

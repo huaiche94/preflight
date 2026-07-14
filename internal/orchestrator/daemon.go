@@ -146,7 +146,9 @@ func DaemonStop(ctx context.Context, deps DaemonDeps) (DaemonStopResult, error) 
 	}
 	proc, err := os.FindProcess(meta.PID)
 	if err != nil {
-		return DaemonStopResult{PID: meta.PID}, nil
+		// Unreachable on Unix (FindProcess always succeeds there), so a
+		// real error here is worth surfacing, not mapping to "not running".
+		return DaemonStopResult{}, fmt.Errorf("orchestrator: DaemonStop: finding pid %d: %w", meta.PID, err)
 	}
 	if err := proc.Signal(syscall.SIGTERM); err != nil {
 		if errors.Is(err, os.ErrProcessDone) {
