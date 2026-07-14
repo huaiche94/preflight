@@ -152,20 +152,27 @@ func projectOneQuotaWindow(obs domain.QuotaObservation, tokenForecast domain.Tok
 
 // projectContext implements ADD §15.9's context projection:
 // projected_context_used_p90 = current_context_used + predicted_net_context_growth_p90.
-// Growth is expressed as a fraction of WindowTokens (coldstart.go's
-// defaultContextGrowthP90Fraction), scaled by the token forecast when
-// available, then converted to a percentage-point delta consistent with
-// ContextObservation.UsedPercent's own units. Falls back to UsedTokens/
-// WindowTokens when UsedPercent itself is nil but both token counts are
-// present (an equally valid measurement per usage.go's own field set).
+// Growth is expressed in TOKENS (coldstart.go's
+// defaultContextGrowthP90Tokens, D-14), scaled by the token forecast when
+// available, then divided by the observed WindowTokens to get a
+// percentage-point delta consistent with ContextObservation.UsedPercent's
+// units — so the same "typical turn" costs 10 points of a 200k window
+// but only 2 points of a 1M window. Only when WindowTokens is unknown
+// does the pre-D-14 window-fraction default apply (a fraction is the only
+// unit that survives without a window size).
 func projectContext(obs domain.ContextObservation, tokenForecast domain.TokenForecast) (*float64, []domain.ReasonCode) {
 	current, ok := currentContextUsedPercent(obs)
 	if !ok {
 		return nil, []domain.ReasonCode{domain.ReasonContextUnknown}
 	}
 
-	growthFraction := tokenAdjustedDelta(defaultContextGrowthP90Fraction, tokenForecast)
-	deltaPercent := growthFraction * 100
+	var deltaPercent float64
+	if obs.WindowTokens != nil && *obs.WindowTokens > 0 {
+		growthTokens := tokenAdjustedDelta(defaultContextGrowthP90Tokens, tokenForecast)
+		deltaPercent = growthTokens / float64(*obs.WindowTokens) * 100
+	} else {
+		deltaPercent = tokenAdjustedDelta(fallbackContextGrowthP90Fraction, tokenForecast) * 100
+	}
 
 	projected := current + deltaPercent
 	if projected > 100 {
@@ -183,16 +190,19 @@ func projectContext(obs domain.ContextObservation, tokenForecast domain.TokenFor
 }
 
 // currentContextUsedPercent resolves the current context-window usage
-// percentage from obs, preferring the direct UsedPercent measurement and
-// falling back to UsedTokens/WindowTokens when both are present. ok=false
-// means genuinely unknown (ADD principle 1: unknown is not zero) — never
-// a fabricated 0%.
+// percentage from obs, preferring the exact UsedTokens/WindowTokens ratio
+// and falling back to the provider-reported UsedPercent. D-14 flipped
+// that preference: Claude Code rounds used_percentage to whole percents
+// (1% of a 1M window is a 10k-token blur) while the token counts in the
+// same payload are exact — prefer the sharp measurement, keep the coarse
+// one as fallback. ok=false means genuinely unknown (ADD principle 1:
+// unknown is not zero) — never a fabricated 0%.
 func currentContextUsedPercent(obs domain.ContextObservation) (float64, bool) {
-	if obs.UsedPercent != nil {
-		return *obs.UsedPercent, true
-	}
 	if obs.UsedTokens != nil && obs.WindowTokens != nil && *obs.WindowTokens > 0 {
 		return (float64(*obs.UsedTokens) / float64(*obs.WindowTokens)) * 100, true
+	}
+	if obs.UsedPercent != nil {
+		return *obs.UsedPercent, true
 	}
 	return 0, false
 }

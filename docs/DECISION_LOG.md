@@ -76,6 +76,15 @@ flowchart TD
     D12 ==>|✅ #21+#20 Phase 0 捕捉先| D12A[capture-before-model 紀律<br/>晚一天=一天 unlabeled]
     D12 -.->|✗ #11 校準骨架先| D12B[缺標籤恐返工]
     D12 -.->|✗ #7 daemon 先| D12C[資料飛輪慢幾週]
+
+    D12A --> D13{D-13 statusline 格式 v2}
+    D13 ==>|✅ 白話機率 + weekly 段| D13A[probably 50% < N tokens<br/>去成本段、✓ RUN、◷ weekly limit]
+    D13 -.->|✗ 保留分位數術語| D13B[est P50 Ntok 較難讀]
+
+    D13A --> D14{D-14 context 投影顆粒度}
+    D14 ==>|✅ A+B：顯示分離 + token 常數| D14A[measured→projected 顯示<br/>增長預設改 token 表達]
+    D14 -.->|✗ 只修顯示 A| D14B[1M 窗投影仍悲觀 10 倍]
+    D14 -.->|✗ 只等 #11/#20 校準| D14C[cold-start 悲觀持續數週]
 ```
 
 ---
@@ -160,6 +169,20 @@ flowchart TD
 - **選項：** ①**#21 + #20 Phase 0 捕捉先（✅）**——capture-before-model 紀律：晚一天記錄就是一天 unlabeled 歷史，#11 校準要分層的正是這些欄位；②#11 校準骨架先（缺標籤恐返工）；③#7 daemon 先（資料飛輪慢幾週）。
 - **首次 E2E 回饋紀錄（2026-07-13）：** owner 的互動 session 仍掛改名前設定（見到舊 `pf✈`、未見預估卡）——結論：hooks 在 session 啟動時快照，改設定需重開 session。卡片觀感回饋延至 owner 實際體驗後（下次 session 結尾再問）。
 - **更正（2026-07-13，同日稍晚）：** 上述歸因不完整——重開 session 後仍見 `pf✈`，追查發現 ADR-045 決定的 `pf✈`→`ax✈` 從未在程式碼落地（`git log -S 'ax✈'` 無任何 commit；改名 commit 只動了文件）。已改 `StatusLineText` 及全部測試並重新部署 `~/.local/bin/auspex`。教訓：ADR 的 Consequences 條列若含程式碼變更，落地 commit 應在同一 PR 或明確開 issue 追蹤，不能只寫在 ADR 裡。
+
+## D-13 — Statusline 格式 v2（issue #31）
+
+- **日期／情境：** 2026-07-14。Owner 首次完整體驗 statusline（#27 修復遙測、#29 加 icon/顏色之後）後直接指定新格式：白話機率、去掉成本區間、加 weekly limit 段、RUN 改綠勾。
+- **決定（owner 指定，未開選項）：** `ax✈ <model> │ 🔮 probably (50%) < N tokens │ context worst-case [██████··············] ~N% │ ◷ weekly limit ~N% │ ✓ RUN  WARN  CHECKPOINT_AND_RUN  BLOCK`。v2.1（owner 看過 v2 實機後追加）：context 段改用 20 格進度條（每格 5%，取代圓形量表）；policy 段顯示完整嚴重度量表——當前狀態亮色＋icon、其餘暗色，first-time user 不用先知道量表全貌就能讀懂位置；量表外的未知 action 單獨原樣顯示，不冒充量表成員。「(50%)」是渲染資料非固定標籤——#11 校準落地後分位數可以收緊而格式不變（owner 明言要機率顆粒度的成長空間）。weekly 段直接取自 live snapshot 的 seven_day 視窗（#27 之後是真資料），與預估卡無關、cold session 也會顯示；著色等 #21 的 binding-constraint policy 給出誠實閾值後再做。
+- **Constitution #2 張力（已知會）：** 「probably」是機率語言，而 P50 目前是未校準規則值。緩解：括號保留分位數本體、卡片表面（additionalContext／`auspex evaluate`）維持完整 "uncalibrated estimate" 標籤；statusline 是最壓縮的表面，可讀性優先是 owner 的取捨。
+- **可逆性：** 高——純 presenter 層字串，測試 byte-exact pin，改回一個 commit。
+
+## D-14 — Context 投影的顆粒度與 1M 窗悲觀偏差（issue #31 後續）
+
+- **日期／情境：** 2026-07-14。Owner 追問 context worst-case 的計算依據，稽核發現三層問題：①投影 = 實測 + cold-start 常數 `0.10 × window`——「window 比例」單位在 200k 窗年代合理（10% = 20k tokens），在 owner 的 Fable 5 1M 窗變成「每輪悲觀 107k tokens」，比實測單輪增量（1–3%）悲觀一個數量級；②predictor 輸入偏好 Claude Code 的整數 `used_percentage`（1% = 1M 窗的 10k token 糊掉），同 payload 的精確 `used_tokens` 反而只是 fallback；③statusline 只顯示投影終值，實測與預測成分不可分辨。
+- **選項：** ①**A+B（✅）**——A 顯示層：context 段改 `[bar] 26.8% → worst-case ~29%`（實測一位小數、預測帶 ~ 標記），renderer 輸入重構為 `StatusLineInput` struct；B 常數修正：增長預設改用 token 表達（P50 6k / P90 20k tokens，= 舊 fraction 在 200k 窗的絕對值，200k 行為不變、大窗誠實縮放；window 未知時 fallback 回 fraction）＋輸入偏好翻轉為精確 tokens。②只做 A——1M 窗投影仍悲觀 10 倍。③只等 #11/#20——校準需累積遙測，悲觀顯示持續數週。
+- **另釐清（owner 問）：** 「打字中即時預估」現行 statusline 架構做不到（payload 無輸入緩衝區、無 keystroke 觸發、最早鉤子是 UserPromptSubmit）——該需求屬 M12 VS Code 擴充（#10，blocked on M6）；「送出前預估」已有 `auspex evaluate --prompt-file -`。
+- **可逆性：** 高——常數與顯示皆單點；#11 校準落地後 cold-start 常數整組被取代。
 
 ---
 
