@@ -1,5 +1,7 @@
 # Auspex Architecture Design Document
 
+> 🌐 本文件以繁體中文撰寫，即為架構的規範文本（normative text）——ADR-049 的「英文為規範文本」規則不適用於本檔與 `docs/DECISION_LOG.md` 這兩個中文原著。目前沒有英文譯本；若日後補上，英文版為非規範翻譯。
+
 | 欄位 | 值 |
 |---|---|
 | 專案 | **Auspex** |

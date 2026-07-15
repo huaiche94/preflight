@@ -5,6 +5,8 @@
 > teammates during Phase 0. Kept for historical reference only; do not
 > execute this prompt as-is.
 
+> 🌐 English | [繁體中文](execution_prompt.zh-TW.md)
+
 Create an agent team with exactly four teammates.
 
 Do not spawn more than four teammates without asking me first.

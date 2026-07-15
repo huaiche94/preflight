@@ -1,5 +1,7 @@
 # Predictor
 
+> 🌐 English | [繁體中文](predictor.zh-TW.md)
+
 Scope Estimator, Predictor, Risk, Policy, and Authorization.
 
 ## Model

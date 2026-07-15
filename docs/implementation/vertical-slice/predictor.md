@@ -1,5 +1,7 @@
 # Predictor — Vertical-Slice Progress Artifact
 
+> 🌐 English | [繁體中文](predictor.zh-TW.md)
+
 Role packet: `agents/predictor.md`. Frozen contracts: `docs/implementation/vertical-slice/CONTRACT_FREEZE.md`.
 Branch: `vertical-slice/predictor`. This wave covered exactly the root nodes unblocked by `contract-integrator`
 per the frozen execution DAG: `predictor-02`, `predictor-03`, `predictor-04`.

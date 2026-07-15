@@ -1,5 +1,7 @@
 # Security Policy
 
+> 🌐 English | [繁體中文](SECURITY.zh-TW.md)
+
 Auspex is a local-first predictive runtime guard that sits in the
 path of AI coding agent turns (Codex, Claude Code, and eventually
 others). Its threat model matters more than a typical CLI tool's: it
@@ -27,7 +29,7 @@ public.
   reports may need coordination with that provider's own disclosure
   process in addition to ours.
 
-This process is normative per `Auspex_ADD.md` §30.8. If this file
+This process is normative per `docs/design/Auspex_ADD.md` §30.8. If this file
 and the ADD ever disagree, the ADD wins (see `CONSTITUTION.md` §1) and
 this file is a bug to be fixed.
 
@@ -37,7 +39,7 @@ Auspex is currently pre-1.0 (vertical slice under active,
 milestone-gated construction — see `README.md`'s wave roadmap). Until a
 1.0 release, security fixes land on `main` only; there is no
 long-term-support branch yet. Once 1.0 ships, this section will be
-updated with a real support matrix per `Auspex_ADD.md` §30.6's
+updated with a real support matrix per `docs/design/Auspex_ADD.md` §30.6's
 SemVer/stability guarantees.
 
 ## Scope
@@ -62,7 +64,7 @@ Out of scope:
 - Social-engineering, physical-access, or denial-of-service reports
   against a single local machine the reporter already fully controls
   (Auspex is a local-first, single-machine tool per
-  `Auspex_ADD.md` §1.4 — "attacker already has a shell on your
+  `docs/design/Auspex_ADD.md` §1.4 — "attacker already has a shell on your
   machine" is not a useful threat model for this project, consistent
   with most local developer tooling).
 
@@ -75,7 +77,7 @@ the following is squarely in scope:
 
 - Raw prompt text or tool output escaping its declared non-persistence
   boundary (persisted, logged, or transmitted when it should not be —
-  `Auspex_ADD.md`'s "Unknown is not zero" / privacy-by-default
+  `docs/design/Auspex_ADD.md`'s "Unknown is not zero" / privacy-by-default
   principles, `CONTRACT_FREEZE.md`'s privacy contract).
 - Bearer tokens, API keys, or other credentials appearing unredacted in
   logs, DB exports, checkpoint manifests, or support bundles.
@@ -97,7 +99,7 @@ the following is squarely in scope:
 
 ## Privacy-sensitive changes
 
-Per `Auspex_ADD.md` §30.9, any change to raw prompt retention,
+Per `docs/design/Auspex_ADD.md` §30.9, any change to raw prompt retention,
 outbound telemetry, the auto-resume default, state artifact content, or
 remote checkpoint behavior requires a privacy review, an ADR (see
 `CONSTITUTION.md` §3), and a changelog entry — not just a code review.

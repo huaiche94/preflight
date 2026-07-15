@@ -1,5 +1,7 @@
 # Predictor Improvement Suggestions
 
+> 🌐 English | [繁體中文](Predictor_Improvement_Suggestions.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | Phase | 3.4 — Post Wave 2 Analysis |

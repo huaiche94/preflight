@@ -1,5 +1,7 @@
 # Preflight Day-1 Contract Freeze
 
+> 🌐 English | [繁體中文](CONTRACT_FREEZE_TEMPLATE.zh-TW.md)
+
 Status: DRAFT — A00 must replace every placeholder before feature branches rebase.
 Contract commit: `<sha>`
 Go module: `<module>`

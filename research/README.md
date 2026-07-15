@@ -1,5 +1,7 @@
 # research/ — offline calibration pipeline (M13, issue #11)
 
+> 🌐 English | [繁體中文](README.zh-TW.md)
+
 The offline half of the calibration loop: reads `auspex export
 calibration` and `auspex export observations` JSONL, reports data
 readiness, derives per-turn ACTUAL cost/context deltas, and — once

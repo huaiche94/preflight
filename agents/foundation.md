@@ -1,5 +1,7 @@
 # Foundation
 
+> 🌐 English | [繁體中文](foundation.zh-TW.md)
+
 ## Model
 
 A cheaper coding model is sufficient; use Fable only for migration/recovery review.

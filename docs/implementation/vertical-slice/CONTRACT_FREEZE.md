@@ -1,5 +1,7 @@
 # Auspex Vertical-Slice Contract Freeze
 
+> 🌐 English | [繁體中文](CONTRACT_FREEZE.zh-TW.md)
+
 Status: **ACCEPTED** — Bootstrap stage, executed by the lead directly (see `CONSTITUTION.md` amendment pending re: Bootstrap-as-lead-only-prerequisite, approved by repository owner 2026-07-12).
 Contract commit: `4262b4b`
 Go module: `github.com/huaiche94/auspex`

@@ -1,5 +1,7 @@
 # ADR-044 — Freeze the repository/session feature-lookup port (REC-01)
 
+> 🌐 English | [繁體中文](0044-frozen-feature-lookup-port.zh-TW.md)
+
 Status: Accepted
 Date: 2026-07-13
 Owner: contract-integrator (lead-executed)

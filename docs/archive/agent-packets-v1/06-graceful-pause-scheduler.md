@@ -1,5 +1,7 @@
 # A06 — Graceful Pause, Safe Points, and Durable Scheduler
 
+> 🌐 English | [繁體中文](06-graceful-pause-scheduler.zh-TW.md)
+
 ## Model
 
 Use Fable.

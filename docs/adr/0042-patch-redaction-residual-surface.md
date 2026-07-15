@@ -1,5 +1,7 @@
 # ADR-042 — Patch redaction excludes filenames and binary-diff headers: accepted residual surface
 
+> 🌐 English | [繁體中文](0042-patch-redaction-residual-surface.zh-TW.md)
+
 Status: Accepted
 Date: 2026-07-13
 Owner: checkpoint (Part B / repocheckpoint), decision recorded by lead

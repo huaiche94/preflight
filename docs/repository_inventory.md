@@ -1,11 +1,13 @@
 # Auspex Repository Markdown Inventory
 
+> 🌐 English | [繁體中文](repository_inventory.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | Scope | Every `*.md` file in the repository (13 files found, all opened) |
 | Purpose | Phase 0 repository normalization — classification only |
-| Status | **Migration executed 2026-07-12.** See §6 for the execution log. This table now describes pre-migration state (kept for audit trail); current state is summarized in §6. |
-| Generated | 2026-07-12 (updated 2026-07-12 after execution) |
+| Status | **Migration executed 2026-07-12; further reorganizations logged since.** §2's table describes the original pre-migration state (kept for audit trail); each later pass appends an execution log — see §6 (normalization), §7 (role restructuring + Constitution), §8 (docs reorg + bilingual policy, ADR-049). §8's resulting-state table is current. |
+| Generated | 2026-07-12 (last updated 2026-07-14, §8) |
 
 ---
 
@@ -159,3 +161,43 @@ governance document. Executed:
 | Task-level execution DAG | `docs/implementation/vertical-slice/EXECUTION_DAG.md` — **stale, pending regeneration under the 7-role structure** |
 
 No two markdown files in the repository now contain overlapping authoritative content.
+
+---
+
+## 8. Execution log (2026-07-14) — documentation reorganization + bilingual policy (ADR-049, D-17)
+
+The repository owner requested: a root `README.md` rewritten for
+first-time viewers, root markdown organized into `docs/`, a `README.md`
+introduction in every folder, and a Traditional Chinese version of every
+markdown document. Recorded as ADR-049 and `docs/DECISION_LOG.md` D-17.
+Executed:
+
+| Action | Result |
+|---|---|
+| `Auspex_ADD.md`, `Auspex_Predictor_Design_Supplement.md`, `Auspex_Parallel_Execution_Plan.md` | `git mv` to `docs/design/` (filenames unchanged, so `§` citations by document name stay greppable). Living documents (`CONSTITUTION.md`, `CONTRIBUTING.md`, `GOVERNANCE.md`, `SECURITY.md`, `SUPPORT.md`, `AGENTS.md`, `agents/*.md`) now cite the new path. Historical records (accepted ADRs, `docs/archive/**`, `docs/implementation/**` progress logs, Go comments, JSON-schema description strings, checksummed `testdata/**` fixtures) intentionally unchanged. |
+| Root `README.md` | Rewritten for first-time viewers: real forecast-card output, current command tree (`daemon`/`init`/`run`/`gc`/`export` included), honest cold-start caveats (#42/#11), documentation map. The wave-by-wave integration table moved to `docs/implementation/vertical-slice/README.md`. |
+| `docs/adr/0049-docs-reorg-bilingual.md` (new) | Records the reorg and the bilingual documentation policy. |
+| Folder `README.md` files (~68 new) | Every folder now has one — `docs/` tree, `cmd/`, `pkg/` tree, all `internal/` packages, `schemas/`, `integrations/`, `research/calibration/`, `vscode/` subfolders, `testdata/` root. Exception (ADR-049 §4): fixture directories whose contents tests enumerate or checksum (`testdata/*` leaf dirs, `internal/cli/testdata/`, `internal/managed/testdata/`) get no README; the nearest ancestor README documents them. |
+| Bilingual siblings `<name>.zh-TW.md` | Every documentation markdown file gained a Traditional Chinese sibling, cross-linked from the top of both files. **Normative text = the document's authorship language**: English for all files except `docs/design/Auspex_ADD.md` and `docs/DECISION_LOG.md`, which are authored in Traditional Chinese, are normative as written, and get no duplicate sibling. Markdown test fixtures (`testdata/checkpoints/state/add-section-18-*.md`) are not documentation and are not translated. |
+| `CHANGELOG.md` | Post-slice work recorded (daemon #7, VS Code MVP #53, forecast surface #14, statusline v3 #41, session bootstrap #17, event correlation #1, real restore #6, turn correlation #54); stale "Known gaps" replaced with current ones (#42/#11, #9/#8, #50/#51). |
+| `integrations/claude/README.md` | Refreshed from its wave-era "forward-looking stub" header to current reality: CLI shipped, hooks live (dogfooding #12), lazy session bootstrap (D-07/#17), `--emit-line` v3 statusline format, `auspex init`. The unresolved REC-03 naming-discrepancy record is kept. |
+| This file | Header status updated; this §8 appended; `repository_inventory.zh-TW.md` sibling added. |
+
+### Resulting state: exactly one source of truth per subject (current)
+
+| Subject | Single source of truth | Language |
+|---|---|---|
+| Process, governance, invariants | `CONSTITUTION.md` | English |
+| Architecture | `docs/design/Auspex_ADD.md` | **Traditional Chinese (normative as written)** |
+| Owner decision log | `docs/DECISION_LOG.md` | **Traditional Chinese (normative as written)** |
+| vertical-slice execution mechanics | `docs/design/Auspex_Parallel_Execution_Plan.md` | English |
+| Per-role definition | `agents/*.md` | English |
+| Contributor/agent instructions | `AGENTS.md` | English |
+| Project overview/entry point | `README.md` | English |
+| Repository markdown audit | this file | English |
+| Superseded/obsolete material | `docs/archive/` (kept, not deleted, not authoritative) | English |
+| Task-level execution DAG | `docs/implementation/vertical-slice/EXECUTION_DAG.md` (executed; historical record) | English |
+
+Every `.zh-TW.md` file is a non-normative translation of its English
+sibling (ADR-049); where they diverge, the original-language document
+wins and the translation is the bug.

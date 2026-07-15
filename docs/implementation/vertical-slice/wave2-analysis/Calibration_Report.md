@@ -1,5 +1,7 @@
 # Calibration Report
 
+> 🌐 English | [繁體中文](Calibration_Report.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | Phase | 3.2 — Post Wave 2 Analysis |

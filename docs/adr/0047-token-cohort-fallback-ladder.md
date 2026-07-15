@@ -1,5 +1,7 @@
 # ADR-047 — Similar-turn cohort fallback ladder for the token forecaster (#20 Phase 1)
 
+> 🌐 English | [繁體中文](0047-token-cohort-fallback-ladder.zh-TW.md)
+
 Status: Accepted
 Date: 2026-07-14
 Owner: lead-executed

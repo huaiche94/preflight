@@ -5,6 +5,8 @@
 
 # AgentGuard --- Runtime Guard for AI Coding Agents
 
+> 🌐 English | [繁體中文](AgentGuard_Architecture.zh-TW.md)
+
 ## Vision
 
 AgentGuard is **not** another checkpoint manager or agent memory system.

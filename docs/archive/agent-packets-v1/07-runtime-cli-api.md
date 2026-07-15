@@ -1,5 +1,7 @@
 # A07 — Application Orchestration, CLI, Local API, and Vertical-Slice Wiring
 
+> 🌐 English | [繁體中文](07-runtime-cli-api.zh-TW.md)
+
 ## Model
 
 A cheaper coding model is sufficient; use Fable for authorization/pause orchestration review.

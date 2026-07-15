@@ -1,5 +1,7 @@
 # A00 — Contract Freeze and Integration Agent
 
+> 🌐 English | [繁體中文](00-contract-integrator.zh-TW.md)
+
 ## Model
 
 Use Fable.

@@ -1,5 +1,7 @@
 # A04 — Git Observation and Repository Checkpoint
 
+> 🌐 English | [繁體中文](04-repository-checkpoint.zh-TW.md)
+
 ## Model
 
 A cheaper coding model can implement most of this; use Fable for path/race/security review.

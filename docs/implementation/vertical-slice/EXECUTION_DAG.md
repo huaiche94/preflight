@@ -1,5 +1,7 @@
 # Auspex Execution DAG
 
+> 🌐 English | [繁體中文](EXECUTION_DAG.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | Source | `Auspex_ADD.md` + `Auspex_Parallel_Execution_Plan.md` + `agents/*.md` (canonical per those docs) |

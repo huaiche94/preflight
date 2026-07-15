@@ -1,5 +1,7 @@
 # A02 — Claude Telemetry, Hooks, and Provider Normalization
 
+> 🌐 English | [繁體中文](02-claude-telemetry-hooks.zh-TW.md)
+
 ## Model
 
 Use Fable for hook semantics review; routine parser/fixture work can use a cheaper model.

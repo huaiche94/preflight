@@ -1,5 +1,7 @@
 # Auspex Vertical-Slice Contract Freeze
 
+> 🌐 English | [繁體中文](CONTRACT_FREEZE_TEMPLATE.zh-TW.md)
+
 Status: DRAFT — contract-integrator must replace every placeholder before other roles' branches rebase.
 Contract commit: `<sha>`
 Go module: `<module>`

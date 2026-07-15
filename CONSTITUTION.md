@@ -1,9 +1,11 @@
 # Auspex Repository Constitution
 
+> 🌐 English | [繁體中文](CONSTITUTION.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | Status | **Normative. Supreme process authority for this repository.** |
-| Scope | How Auspex-the-project is built and governed — not what Auspex-the-product does at runtime (that is `Auspex_ADD.md`'s domain). |
+| Scope | How Auspex-the-project is built and governed — not what Auspex-the-product does at runtime (that is `docs/design/Auspex_ADD.md`'s domain). |
 | Precedence | This document is more authoritative than `README.md` and `AGENTS.md`. If either ever contradicts this document, the Constitution wins and the other file is wrong and must be fixed. |
 | Amendment | Only the `contract-integrator` role/architecture lead may amend this file, and only via the same ADR discipline defined in §3 below. |
 
@@ -22,10 +24,10 @@ as authoritative over the documents named below for their subject.
 
 | Subject | Sole source of truth |
 |---|---|
-| Product architecture, domain model, requirements, roadmap | `Auspex_ADD.md` |
+| Product architecture, domain model, requirements, roadmap | `docs/design/Auspex_ADD.md` |
 | Architecture decisions that amend the ADD | Accepted ADRs under `docs/adr/` |
 | Process, governance, invariants, who-can-modify-what | **This file** |
-| Current execution wave's mechanics (topology, merge order, ownership map) | `Auspex_Parallel_Execution_Plan.md` (or its successor for later waves) |
+| Current execution wave's mechanics (topology, merge order, ownership map) | `docs/design/Auspex_Parallel_Execution_Plan.md` (or its successor for later waves) |
 | A given role's mission, exclusive paths, deliverables, tests | Its file under `agents/` |
 | Contributor/agent quick-reference | `AGENTS.md` |
 | Project entry point / orientation | `README.md` |
@@ -42,7 +44,7 @@ with a governing document, resolve in this order:
 
 ```text
 1. This Constitution                        (process/governance/invariants)
-2. Auspex_ADD.md + accepted ADRs          (architecture)
+2. docs/design/Auspex_ADD.md + accepted ADRs          (architecture)
 3. Current execution plan                    (this wave's mechanics)
 4. agents/*.md                               (role-scoped operational detail)
 5. AGENTS.md / README.md                     (summaries — must not contradict 1-4)
@@ -76,14 +78,14 @@ Rules:
 1. ADRs live at `docs/adr/NNNN-title.md`, numbered sequentially.
 2. Only the `contract-integrator` role (architecture lead) accepts an ADR. Any role may propose one.
 3. An accepted ADR is immutable history. To change a decision, write a new ADR that supersedes the old one — never edit an accepted ADR's decision in place.
-4. An ADR must state: context, the decision, and what it changes in `Auspex_ADD.md` or this Constitution (if anything). If nothing in either document needs to change, the decision didn't need an ADR.
-5. `Auspex_ADD.md` may only be edited by `contract-integrator`, and only when a genuine contradiction requires it — with the corresponding ADR landing in the same change.
+4. An ADR must state: context, the decision, and what it changes in `docs/design/Auspex_ADD.md` or this Constitution (if anything). If nothing in either document needs to change, the decision didn't need an ADR.
+5. `docs/design/Auspex_ADD.md` may only be edited by `contract-integrator`, and only when a genuine contradiction requires it — with the corresponding ADR landing in the same change.
 
 ## 4. Who can modify what
 
 1. Every role owns a disjoint set of paths, declared in its `agents/*.md` file and summarized in the current execution plan's shared-file policy section.
 2. A role may only modify files inside its own declared paths.
-3. Shared, cross-cutting files — `Auspex_ADD.md`, this `CONSTITUTION.md`, `AGENTS.md`, `internal/domain/**`, `internal/app/ports.go`, `pkg/protocol/v1/**`, `docs/adr/**` — are owned exclusively by `contract-integrator`. No other role edits them, ever, including "just a typo fix."
+3. Shared, cross-cutting files — `docs/design/Auspex_ADD.md`, this `CONSTITUTION.md`, `AGENTS.md`, `internal/domain/**`, `internal/app/ports.go`, `pkg/protocol/v1/**`, `docs/adr/**` — are owned exclusively by `contract-integrator`. No other role edits them, ever, including "just a typo fix."
 4. If a role needs a change to a file it doesn't own, it requests the change through its progress artifact (`docs/implementation/vertical-slice/<role>.md` or the equivalent for a later wave) — it does not make the edit itself and does not wait idle; it works around the gap with a documented assumption until the owner responds.
 5. No role may expand its own path ownership. Only `contract-integrator` may reassign path ownership, and only by updating the execution plan and the affected `agents/*.md` files in the same change.
 6. `go.mod` and `go.sum` are owned only by `foundation`.
@@ -92,7 +94,7 @@ Rules:
 ## 5. When a new Provider may be added
 
 Auspex integrates providers (Codex, Claude Code, and eventually others)
-through the capability-based model in `Auspex_ADD.md` §6.7 and §8. A new
+through the capability-based model in `docs/design/Auspex_ADD.md` §6.7 and §8. A new
 provider integration may be added only when **all** of the following hold:
 
 1. It implements the narrow provider interfaces in ADD §9.10 (`ProviderDetector`, `HookNormalizer`, `ManagedRunner`, etc.) — it does not require widening any existing interface into a God interface, and it does not require a new interface that only one provider implements without a documented reason.
@@ -105,7 +107,7 @@ provider integration may be added only when **all** of the following hold:
 
 ## 6. Progress Tree invariants
 
-These are product invariants (`Auspex_ADD.md` §1.3, §1.6, §6.4, FR-100–FR-110) and are non-negotiable in the implementation, not stylistic preferences:
+These are product invariants (`docs/design/Auspex_ADD.md` §1.3, §1.6, §6.4, FR-100–FR-110) and are non-negotiable in the implementation, not stylistic preferences:
 
 1. **Progress Tree is the canonical durable task state.** Conversation context, chat memory, and an agent's own claim of "done" are never the source of truth.
 2. **A node may not be marked `completed` without durable, validator-checked artifact evidence** — a real file, DB record, checksum, or Git snapshot. Text alone is insufficient (ADD principle 5: "Completed means evidenced").
@@ -132,15 +134,15 @@ status — if `AGENTS.md` and this section ever diverge, fix `AGENTS.md`:
 10. An agent implements one milestone/wave at a time and does not add abstractions a later milestone would need but the current one doesn't.
 11. An agent does not declare a task complete without the durable evidence required by §6 above.
 
-## 8. Relationship to `Auspex_ADD.md`
+## 8. Relationship to `docs/design/Auspex_ADD.md`
 
-This Constitution does not compete with `Auspex_ADD.md` for authority —
+This Constitution does not compete with `docs/design/Auspex_ADD.md` for authority —
 they govern different domains and neither subordinates the other:
 
-- `Auspex_ADD.md` is supreme for **what Auspex is and how it behaves at runtime** (architecture, domain model, requirements).
+- `docs/design/Auspex_ADD.md` is supreme for **what Auspex is and how it behaves at runtime** (architecture, domain model, requirements).
 - This Constitution is supreme for **how the Auspex repository and its contributors/agents behave while building it** (process, ownership, invariant enforcement, governance).
 
 Where a Progress Tree invariant (§6) is simultaneously a runtime behavior
 *and* a development-process rule, this Constitution states it because it
-constrains how agents must build the feature, while `Auspex_ADD.md`
+constrains how agents must build the feature, while `docs/design/Auspex_ADD.md`
 remains the canonical technical specification of the feature itself.

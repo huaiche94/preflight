@@ -1,5 +1,7 @@
 # ADR-041 — Predictor pipeline gets an explicit Forecast layer
 
+> 🌐 English | [繁體中文](0041-predictor-forecast-layer.zh-TW.md)
+
 Status: Accepted
 Date: 2026-07-12
 Owner: contract-integrator (lead)

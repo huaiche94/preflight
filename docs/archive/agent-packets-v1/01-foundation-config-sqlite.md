@@ -1,5 +1,7 @@
 # A01 — Foundation, Configuration, Paths, and Core SQLite
 
+> 🌐 English | [繁體中文](01-foundation-config-sqlite.zh-TW.md)
+
 ## Model
 
 A cheaper coding model is sufficient; use Fable only for migration/recovery review.

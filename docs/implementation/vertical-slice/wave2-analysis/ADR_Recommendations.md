@@ -1,5 +1,7 @@
 # ADR Recommendations
 
+> 🌐 English | [繁體中文](ADR_Recommendations.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | Phase | 3.9 — Post Wave 2 Analysis |

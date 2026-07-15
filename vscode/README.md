@@ -1,5 +1,7 @@
 # Auspex — VS Code companion extension (MVP)
 
+> 🌐 English | [繁體中文](README.zh-TW.md)
+
 Companion UI for the [Auspex](https://github.com/huaiche94/auspex) daemon
 (issue #10; ADD §8.4, FR-162/163/164): live daemon status, the wake-job
 queue, and one mutation — cancelling a scheduled resume.

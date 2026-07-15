@@ -1,5 +1,7 @@
 # testdata/repositories fixtures
 
+> 🌐 English | [繁體中文](README.zh-TW.md)
+
 This directory holds fixtures for `internal/repocheckpoint` and
 `internal/gitx` tests that need example repository *content* rather than
 an example checkpoint *manifest* (see `testdata/checkpoints/repository/`

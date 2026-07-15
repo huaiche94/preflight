@@ -1,5 +1,7 @@
 # Checkpoint
 
+> 🌐 English | [繁體中文](checkpoint.zh-TW.md)
+
 Consolidates what were previously two separate agent packets — **Progress
 Tree / State Checkpointing** and **Repository Checkpoint** — into one
 bounded context. Both halves are owned by the same role because they are

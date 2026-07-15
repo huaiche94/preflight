@@ -1,5 +1,7 @@
 # Changelog
 
+> 🌐 English | [繁體中文](CHANGELOG.zh-TW.md)
+
 All notable changes to Auspex are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [SemVer](https://semver.org/) once releases begin.
@@ -29,8 +31,56 @@ follow [SemVer](https://semver.org/) once releases begin.
   Pre-release rename with no migration; old local `preflight/` data
   directories are abandoned in place. GitHub redirects the old repo URL.
 
+### Documentation
+
+- **Documentation reorganization + Traditional Chinese translations**
+  (ADR-049, D-17): the three design documents moved from the repository
+  root to `docs/design/` (living documents updated to cite the new
+  path; historical records intentionally unchanged), `README.md`
+  rewritten for first-time viewers, every folder gained a `README.md`
+  introduction, and every documentation file gained a non-normative
+  `<name>.zh-TW.md` Traditional Chinese sibling. English remains the
+  sole normative text.
+
 ### Added
 
+- **Turn correlation for terminal hook events** (PR
+  [#54](https://github.com/huaiche94/auspex/pull/54)): Stop/StopFailure
+  events now join back to the turn's evaluation, so
+  prediction-vs-actual outcome pairs accumulate for the M13 calibration
+  pipeline ([#11](https://github.com/huaiche94/auspex/issues/11)).
+- **Background daemon + authenticated loopback HTTP API** (M6, D-16,
+  [#7](https://github.com/huaiche94/auspex/issues/7)): `auspex daemon
+  run` foreground process with `auspex daemon install` generating a
+  macOS LaunchAgent plist; bearer token at `<data>/daemon.token` (0600,
+  rotated each start); SSE event stream at `/v1/events/stream`. Due wake
+  jobs now execute unattended.
+- **VS Code companion extension MVP**
+  ([#10](https://github.com/huaiche94/auspex/issues/10), PR
+  [#53](https://github.com/huaiche94/auspex/pull/53)): status-bar
+  daemon liveness, activity-bar views (status / progress / checkpoints /
+  pause / wake jobs), inline cancel for scheduled resumes; used from
+  source or local VSIX until the marketplace publisher is registered
+  ([#18](https://github.com/huaiche94/auspex/issues/18)).
+- **Per-prompt forecast surface**
+  ([#14](https://github.com/huaiche94/auspex/issues/14)) with the
+  statusline iterated to v3
+  ([#31](https://github.com/huaiche94/auspex/issues/31),
+  [#41](https://github.com/huaiche94/auspex/issues/41)): measured-first
+  context segment, weekly-window segment, single policy badge; the
+  static cold-start token segment is withdrawn until forecasts respond
+  to the prompt ([#42](https://github.com/huaiche94/auspex/issues/42)).
+- **Native-hook session bootstrap**
+  ([#17](https://github.com/huaiche94/auspex/issues/17)): hooks
+  idempotently register repository/worktree/session rows, so the
+  evaluation pipeline works in real provider sessions with zero setup.
+- **Event correlation + `auspex progress complete`** (D-01,
+  [#1](https://github.com/huaiche94/auspex/issues/1)): provider events
+  now correlate to Progress Tree nodes; completion stays explicit and
+  evidence-gated.
+- **Real repository-checkpoint restore**
+  ([#6](https://github.com/huaiche94/auspex/issues/6)), closing the
+  checkpoint-b08 dry-run deferral.
 - **`auspex gc` — tiered telemetry retention** (ADR-046,
   [#19](https://github.com/huaiche94/auspex/issues/19)): raw
   events/features/predictions/decisions/forecasts/consumed
@@ -62,9 +112,16 @@ follow [SemVer](https://semver.org/) once releases begin.
 
 ### Known gaps
 
-- No production adapter yet connects persisted provider events to
-  Progress Tree node completion
-  ([#1](https://github.com/huaiche94/auspex/issues/1)).
-- Unattended wake/resume requires the future daemon
-  ([#7](https://github.com/huaiche94/auspex/issues/7)); wake jobs run
-  via `auspex scheduler run-once` until then.
+- All forecasts are cold-start rules — uncalibrated scores, not
+  probabilities. The token forecast barely responds to the prompt
+  ([#42](https://github.com/huaiche94/auspex/issues/42)); calibration
+  from real telemetry is milestone M13
+  ([#11](https://github.com/huaiche94/auspex/issues/11)).
+- Claude Code is the only provider adapter; Codex (M7/M8) is tracked in
+  [#9](https://github.com/huaiche94/auspex/issues/9). Managed one-shot /
+  shell modes (M11) are tracked in
+  [#8](https://github.com/huaiche94/auspex/issues/8).
+- Prompt-feature extraction runs multiple O(n) passes on the blocking
+  hook path ([#51](https://github.com/huaiche94/auspex/issues/51)) and
+  its payload schema lacks an extraction-version tag
+  ([#50](https://github.com/huaiche94/auspex/issues/50)).

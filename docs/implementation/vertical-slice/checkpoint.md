@@ -1,5 +1,7 @@
 # checkpoint — Progress Artifact
 
+> 🌐 English | [繁體中文](checkpoint.zh-TW.md)
+
 Role covers two internal sub-components (Part A: Progress Tree / State
 Checkpointing; Part B: Repository Checkpoint), kept separate per
 `agents/checkpoint.md`. This wave, only one node was unblocked and assigned:
