@@ -26,16 +26,18 @@
   0 —— 而來自 compaction 的負值 context 差值則原樣呈現，絕不做截斷
   （clamp）處理。可獨立執行（`--json` 可輸出機器可讀格式）。
 - `report.py` —— 針對某份校準匯出資料的資料就緒度（data-readiness），
-  以及（在資料允許的情況下）校準涵蓋率報告；加上
-  `--observations observations.jsonl` 參數時，會併入由
-  `observations.py` 推導出的每回合實際值就緒度區段，以及兩組以
-  `turn_id` 進行的涵蓋率 join：**token 涵蓋率**（預測分位數對上
-  managed-run 的 `total_tokens` 實際值——僅限 managed run，因為
-  statusline 不帶每回合 token）與**成本區間涵蓋率**（預測成本區間
+  以及（在資料允許的情況下）校準涵蓋率報告。**token 涵蓋率**（預測分
+  位數對上同回合的 `total_tokens` 實際值，以 `turn_id` join）現在一律
+  計算：自 #72 第 4 項起，Stop hook 會從 session 逐字稿讀出該回合精確
+  的 token 用量並寫到 `turn.completed` 事件上，而校準匯出以
+  `actual_*_tokens` 欄位承載它（managed-run 的擷取也落在同一組欄位），
+  因此原生 hook 回合也能 join —— 只有在該擷取上線之前的歷史資料永遠
+  無法 join。加上 `--observations observations.jsonl` 參數時，會併入由
+  `observations.py` 推導出的每回合實際值就緒度區段、把 managed-run 的
+  usage 資料列作為額外的 token 實際值來源（#72 之前的路徑，對較舊的匯
+  出仍然有效），以及**成本區間涵蓋率**（預測成本區間
   `cost_low_usd..cost_high_usd` 對上 `observations.py` 推導的每回合成本
-  差值）。成本涵蓋率是 #72 的 hook 模式突破口：每回合成本差值單靠原生
-  hook 遙測即可推導，所以即便 token 無法 join，原生 hook 回合仍能在此
-  join。它會回報區間命中率，並分開統計實際值落在區間之下（成本高估）
+  差值）。它會回報區間命中率，並分開統計實際值落在區間之下（成本高估）
   與之上（成本低估）的筆數——這正是量化 #42／#66 低估現象的方向性訊號。
 
 這些報告最終要餵給的 predictor 位於 `internal/predictor/`；匯出器則位

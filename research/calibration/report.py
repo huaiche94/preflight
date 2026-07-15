@@ -16,16 +16,18 @@ With --observations, the report additionally folds in:
     (observations.py's best-effort attribution): how many turns exist,
     how many are closed by a terminal event, and how many have derivable
     cost/context deltas;
-  * TOKEN COVERAGE (issue #11's last capture gap, closed by managed
-    runs): calibration records carry per-turn predicted
-    token_p50/p80/p90, and managed-run usage rows carry the same turn's
-    ACTUAL total_tokens (already per-turn, already turn-stamped — no
-    delta modeling needed); joining the two on turn_id yields the
-    fraction of turns whose actual landed <= P50 / <= P80 / <= P90.
-    Only turns with BOTH sides count, and the join count is always
-    reported. Native hook turns cannot join (the statusline carries no
-    per-turn tokens), so coverage speaks for managed-run (`auspex run`)
-    turns only.
+TOKEN COVERAGE is always computed: calibration records carry per-turn
+predicted token_p50/p80/p90, and the same record now carries the turn's
+ACTUAL total_tokens where one was captured (#72 item 4: the Stop hook
+reads the session transcript's exact per-turn usage onto turn.completed,
+and the Go exporter joins it — managed-run usage rows land in the same
+field). Joining predicted vs actual on turn_id yields the fraction of
+turns whose actual landed <= P50 / <= P80 / <= P90. Only turns with BOTH
+sides count, and the join count is always reported. With --observations,
+managed-run usage rows from the observations export additionally feed
+the join (the pre-#72 source, still honored for older exports); hook
+turns from before #72's capture have no actual anywhere and can never
+join — an honest, permanent gap for that history.
 """
 
 from __future__ import annotations
@@ -48,9 +50,11 @@ from observations import TurnActuals  # noqa: E402
 SAMPLE_GATE = 8
 
 
-def token_coverage(records: list[Record], observations) -> dict:
+def token_coverage(records: list[Record], observations=()) -> dict:
     """Join per-turn predicted token quantiles with same-turn actual
-    total_tokens from managed-run usage rows, and report coverage.
+    total_tokens — record-embedded (#72's export-side join covers both
+    hook-transcript and managed-run captures) and, when an observations
+    export is supplied, managed-run usage rows too — and report coverage.
 
     Honest gates: only turns with BOTH a prediction and an actual count
     (the join count is part of the result); each quantile's rate is
@@ -63,23 +67,32 @@ def token_coverage(records: list[Record], observations) -> dict:
     # appear anyway (e.g. a re-captured turn), the latest observation
     # wins — mirroring the parser's own last-wins result-line rule —
     # rather than silently double-counting the turn.
-    actuals: dict = {}
+    timed: dict = {}
     for obs in observations:
         if obs.event_type != "provider.usage.observed":
             continue
         if obs.turn_id is None or obs.total_tokens is None:
             continue
         ts = parse_ts(obs.occurred_at, f"usage sample for turn {obs.turn_id}")
-        prev = actuals.get(obs.turn_id)
+        prev = timed.get(obs.turn_id)
         if prev is None or ts >= prev[0]:
-            actuals[obs.turn_id] = (ts, obs.total_tokens)
+            timed[obs.turn_id] = (ts, obs.total_tokens)
+    actuals: dict = {turn_id: total for turn_id, (_, total) in timed.items()}
+
+    # Record-embedded actuals (#72) override the observation-derived value
+    # when both exist: the exporter already applied its own last-wins rule
+    # over the same underlying events, so the record's figure is the
+    # freshest single source.
+    for r in records:
+        if r.actual_total_tokens is not None:
+            actuals[r.turn_id] = r.actual_total_tokens
 
     predicted = [
         r
         for r in records
         if any(q is not None for q in (r.token_p50, r.token_p80, r.token_p90))
     ]
-    joined = [(r, actuals[r.turn_id][1]) for r in predicted if r.turn_id in actuals]
+    joined = [(r, actuals[r.turn_id]) for r in predicted if r.turn_id in actuals]
 
     coverage = {}
     for field, name in (("token_p50", "p50"), ("token_p80", "p80"), ("token_p90", "p90")):
@@ -188,18 +201,16 @@ def build_report(
         )
     if token_cov is None:
         gaps.append(
-            "token P50/P80/P90 coverage was not assessed (needs "
-            "--observations): managed runs (`auspex run`) capture per-turn "
-            "total_tokens actuals now; native hook turns still lack a "
-            "source (the statusline carries no per-turn tokens)"
+            "token P50/P80/P90 coverage was not assessed — pass a "
+            "calibration export to compute it"
         )
     elif token_cov["joined_turns"] == 0:
         gaps.append(
             "0 turns join a token prediction with a same-turn total_tokens "
-            "actual: managed runs (`auspex run`) supply per-turn actuals "
-            "now — dogfood more turns through `auspex run`; native hook "
-            "turns still lack a source (the statusline carries no per-turn "
-            "tokens), so hook-driven turns can never join"
+            "actual: both managed runs (`auspex run`) and native hook turns "
+            "capture per-turn actuals now (#72 reads the Stop hook's "
+            "transcript) — dogfood more turns; history from before #72's "
+            "capture has no actual anywhere and can never join"
         )
     if turn_actuals is None:
         gaps.append(
@@ -314,7 +325,8 @@ def render_text(report: dict) -> str:
     if token_cov is not None:
         lines.append("")
         lines.append(
-            "token coverage (predicted vs managed-run actuals, joined on turn_id):"
+            "token coverage (predicted vs per-turn actuals — hook transcript "
+            "capture and managed runs — joined on turn_id):"
         )
         lines.append(
             f"  turns with a token prediction: {token_cov['predicted_turns']}"
@@ -389,14 +401,17 @@ def main() -> int:
 
     records = list(load(args.export))
     turn_actuals = None
-    token_cov = None
     cost_cov = None
+    observations: list = []
     if args.observations is not None:
         observations = list(load_observations(args.observations))
         turns = derive_turn_actuals(observations)
         turn_actuals = summarize_turn_actuals(turns)
-        token_cov = token_coverage(records, observations)
         cost_cov = cost_coverage(records, turns)
+    # Token coverage no longer needs --observations: the calibration
+    # records carry their own per-turn actuals since #72 (managed-run
+    # usage rows still fold in when an observations export is supplied).
+    token_cov = token_coverage(records, observations)
     report = build_report(records, turn_actuals, token_cov, cost_cov)
 
     if args.json:
