@@ -51,6 +51,19 @@ Auspex 所有重大變更都記錄在此檔案中。格式遵循
 
 ### Added（新增）
 
+- **工具操作捕捉（#67 slice 3a，ADR-052）**：`auspex hook claude
+  post-tool-use` 計數每回合檔案操作；Stop 時在單一行程記憶體內重放
+  transcript 的 `tool_use` 條目（路徑轉序號後即丟棄 —— **任何形式
+  皆不持久化，含 hash**；E2E 以位元組級 DB+WAL grep 證明）。
+  `provider.turn.completed` 新增五個加法式聚合 ——
+  `distinct_files_touched`、`total_file_ops`、`repeated_ops`、
+  `repeat_rate`、`max_ops_on_one_file` —— 並由
+  `auspex.observations-export.v1` 白名單匯出。scratch 計數表
+  （migration 0011，claude-provider 範圍）把關聚合戳記，transcript
+  不可讀時退化為 hook 計數總量。ADR-052 同時記錄解決 ADR-051 /
+  研究文件 §7.6 張力的 payload/匯出 ADR 觸發裁決。slice 3b
+  （風險因子、閾值）續受資料把關（#68）。
+
 - **Statusline v4 —— 觀測三件組優先（#90 Phase A）**：Claude 行與
   `hook codex status` 現在以最差配額窗（+ 重置時間）、runway ETA、
   **今日花費與節奏**（`today $X · pace → ~$Y by 24:00`）領銜，

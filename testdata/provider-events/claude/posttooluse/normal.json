@@ -1,0 +1,16 @@
+{
+  "session_id": "sess_01H9X8K7QZ3M4N5P6R7S8T9V0W",
+  "transcript_path": "/Users/dev/.claude/projects/auspex/sess_01H9X8K7QZ3M4N5P6R7S8T9V0W.jsonl",
+  "cwd": "/Users/dev/projects/auspex",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "/Users/dev/projects/auspex/internal/rotation/keyring.go",
+    "old_string": "const rotationInterval = 24 * time.Hour // secret canary: keyring rotation cadence",
+    "new_string": "const rotationInterval = 12 * time.Hour // secret canary: keyring rotation cadence"
+  },
+  "tool_response": {
+    "filePath": "/Users/dev/projects/auspex/internal/rotation/keyring.go",
+    "success": true
+  }
+}
