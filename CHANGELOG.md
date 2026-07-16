@@ -61,6 +61,21 @@ follow [SemVer](https://semver.org/) once releases begin.
 
 ### Added
 
+- **Tool-op capture (#67 slice 3a, ADR-052)**: `auspex hook claude
+  post-tool-use` counts per-turn file operations; at Stop, the turn's
+  `tool_use` entries are replayed from the transcript in one process's
+  memory (paths interned to ordinals and discarded — **never persisted
+  in any form, hashes included**; proven by a byte-level DB+WAL grep in
+  E2E). `provider.turn.completed` gains five additive aggregates —
+  `distinct_files_touched`, `total_file_ops`, `repeated_ops`,
+  `repeat_rate`, `max_ops_on_one_file` — and the
+  `auspex.observations-export.v1` whitelist exports them. Scratch
+  counter table (migration 0011, claude-provider range) gates stamping
+  and degrades to hook-counted totals when the transcript is unreadable.
+  ADR-052 also records the payload/export ADR-trigger ruling that
+  resolves the ADR-051 / research-§7.6 tension. Slice 3b (risk factor,
+  thresholds) stays data-gated (#68).
+
 - **Statusline v4 — observational trio first (#90 Phase A)**: both the
   Claude line and `hook codex status` now lead with worst quota window
   (+ reset time), runway ETA, and **today's spend + pace**
