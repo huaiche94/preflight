@@ -46,6 +46,19 @@ Auspex 所有重大變更都記錄在此檔案中。格式遵循
 
 ### Added（新增）
 
+- **native-hook 模式的即時 runway 預測（#11）**：Stop/statusline 現在
+  捕捉的每回合配額（Claude 走 transcript、Codex 走 rollout JSONL）驅動
+  既有的 `runway.Scorer` —— 一個與 provider 無關的 driver 讀取近期
+  `provider.quota.observed` 事件、為每個限額窗評分、依 §15.5 取最壞窗
+  合併，並將 `domain.RunwayForecast` 持久化到 `runway_forecasts`
+  （冪等、以 session 為鍵；migration 0042，無新 migration）。評估管線
+  本就會讀最近一筆 forecast —— 現在會回傳真實資料，policy 的 runway
+  reason code（`quota_projected_exceeds_limit_within_horizon` …）於是在
+  真實燃燒率上觸發。statusline 新增未校準的 `⏳ runway ~Ns` 提示，僅在
+  預測將於 horizon 內耗盡時顯示。降級誠實（§8.8）：此訊號只驅動
+  WARN/建議面 —— native hooks 絕不強制暫停。燃燒率以「最近一筆
+  used-percent 真正變動的樣本」為基準量測（對 statusline 洗版穩健）。
+
 - **Daemon session-status API，實作 FR-162（#10）**：新增
   `GET /v1/session/status`（最近的 session）與
   `GET /v1/session/{id}/status`（schema `auspex.daemon.session_status.v1`），

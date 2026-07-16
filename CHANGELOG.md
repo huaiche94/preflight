@@ -55,6 +55,22 @@ follow [SemVer](https://semver.org/) once releases begin.
 
 ### Added
 
+- **Live runway forecasting in native-hook mode (#11)**: the per-turn
+  quota now captured at Stop/statusline (Claude via the transcript,
+  Codex via the rollout JSONL) drives the existing `runway.Scorer` — a
+  provider-agnostic driver reads recent `provider.quota.observed`
+  events, scores each limit window, combines worst-window per §15.5, and
+  persists a `domain.RunwayForecast` to `runway_forecasts` (idempotent,
+  session-keyed; migration 0042, no new migration). The evaluation
+  pipeline already read the latest forecast — it now returns real rows,
+  so the policy's runway reason codes
+  (`quota_projected_exceeds_limit_within_horizon` …) fire on real burn.
+  The statusline gains an uncalibrated `⏳ runway ~Ns` hint shown only
+  when exhaustion is projected within the horizon. Degradation is
+  honest (§8.8): the signal drives WARN/advisory only — native hooks
+  never force a pause. Burn rate is measured against the last sample
+  whose used-percent actually changed (robust to statusline spam).
+
 - **Daemon session-status API for FR-162 (#10)**: new
   `GET /v1/session/status` (most-recent session) and
   `GET /v1/session/{id}/status` (schema `auspex.daemon.session_status.v1`)
