@@ -1,0 +1,19 @@
+{
+  "session_id": "sess_01H9X8K7QZ3M4N5P6R7S8T9V0Z",
+  "transcript_path": "/Users/dev/.claude/projects/auspex/sess_01H9X8K7QZ3M4N5P6R7S8T9V0Z.jsonl",
+  "cwd": "/Users/dev/projects/auspex",
+  "hook_event_name": "PostToolUse",
+  "permission_mode": "acceptEdits",
+  "future_field": "unexpected",
+  "tool_name": "NotebookEdit",
+  "tool_input": {
+    "notebook_path": "/Users/dev/projects/auspex/research/calibration/experiments.ipynb",
+    "cell_id": "cell-7",
+    "new_source": "print('notebook canary: calibration sweep')",
+    "future_input_field": 42
+  },
+  "tool_response": {
+    "success": true,
+    "future_response_field": {"nested": true}
+  }
+}
