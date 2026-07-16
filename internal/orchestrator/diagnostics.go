@@ -141,17 +141,21 @@ type DoctorDeps struct {
 }
 
 // Doctor implements `auspex doctor`: DB reachable/migrated, config
-// loadable, required directories/permissions present. Purely diagnostic —
-// it never creates a directory, writes a config file, or applies a
-// migration; every check is read-only (DBPinger.CurrentVersion may create
-// schema_migrations if wholly absent, mirroring *sqlite.DB's own
-// documented behavior, not a Doctor-specific write).
+// loadable, required directories/permissions present, plus the issue-#90
+// capture-health suite (doctorcapture.go: per-provider last-capture
+// timestamps, token-actual coverage of recent completed turns, runway
+// rows present). Purely diagnostic — it never creates a directory, writes
+// a config file, or applies a migration; every check is read-only
+// (DBPinger.CurrentVersion may create schema_migrations if wholly absent,
+// mirroring *sqlite.DB's own documented behavior, not a Doctor-specific
+// write).
 func Doctor(ctx context.Context, deps DoctorDeps) DoctorResult {
 	var checks []CheckResult
 
 	checks = append(checks, checkDB(ctx, deps.DB))
 	checks = append(checks, checkConfig(deps.Config))
 	checks = append(checks, checkDirs(deps.RequiredDirs)...)
+	checks = append(checks, captureHealthChecks(ctx, deps.DB)...)
 
 	healthy := true
 	for _, c := range checks {

@@ -11,6 +11,11 @@
       "name": "config",
       "status": "skipped",
       "detail": "no config loader configured"
+    },
+    {
+      "name": "capture",
+      "status": "skipped",
+      "detail": "no database configured"
     }
   ]
 }
