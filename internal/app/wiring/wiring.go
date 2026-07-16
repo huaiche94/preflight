@@ -187,6 +187,18 @@ type HookSupport struct {
 	// model-only status line, `evaluate` without card numbers), per
 	// orchestrator.HookDeps.Forecast's own documented contract.
 	Forecast orchestrator.ForecastCardSource
+
+	// Runway optionally drives the independent Runway Predictor from the
+	// Stop hooks' quota telemetry (M10, orchestrator.HookDeps.Runway): when
+	// non-nil, each Stop recomputes and persists a domain.RunwayForecast to
+	// runway_forecasts (so the next turn's evaluation gate reads a live
+	// runway signal), and the statusline renders the latest one as a hint.
+	// The real value is an orchestrator.RunwayForecastStore over the same
+	// *sqlite.DB every other hook seam writes through; nil disables the
+	// drive+hint entirely (runway_forecasts stays empty, the policy gate
+	// sees the cold-start zero forecast), per HookDeps.Runway's own
+	// documented degrade contract.
+	Runway orchestrator.RunwayDriver
 }
 
 // DiagnosticsSupport bundles the optional collaborators
@@ -285,6 +297,7 @@ func (a *App) RootCmd() *cobra.Command {
 		Bootstrapper: a.services.Hooks.Bootstrapper,
 		OpenTurns:    a.services.Hooks.OpenTurns,
 		CodexStatus:  a.services.Hooks.CodexStatus,
+		Runway:       a.services.Hooks.Runway,
 	}
 	if hookDeps.Clock == nil {
 		hookDeps.Clock = clock.New()

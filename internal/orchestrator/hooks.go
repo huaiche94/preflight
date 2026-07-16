@@ -130,6 +130,19 @@ type HookDeps struct {
 	// same nil-is-a-documented-degrade convention every optional field in
 	// this struct follows; no other handler consults it.
 	CodexStatus CodexStatusReader
+
+	// Runway optionally drives the independent Runway Predictor from the
+	// Stop hooks' per-turn quota telemetry (M10, ADR-041/§15.4-15.5,
+	// runwaydrive.go): when non-nil, each Claude/Codex Stop recomputes and
+	// persists a domain.RunwayForecast to runway_forecasts, and the
+	// statusline reads the latest one back as a runway hint. nil disables
+	// both — runway_forecasts stays empty and the policy's runway gate sees
+	// the cold-start zero forecast (exactly the pre-M10 behavior), the same
+	// nil-is-a-documented-degrade convention every optional field here
+	// follows. In native-hook mode this signal never forces a pause (an
+	// interactive turn cannot be interrupted, §8.8): it only records the
+	// forecast the NEXT turn's UserPromptSubmit gate reads.
+	Runway RunwayDriver
 }
 
 // OpenTurnResolver resolves a session's latest started turn. ok=false
@@ -194,6 +207,21 @@ func (d HookDeps) persist(ctx context.Context, evs []v1.Event) (persisted bool) 
 	return true
 }
 
+// driveRunway recomputes and persists the session's runway forecast from
+// its just-committed quota telemetry (M10, runwaydrive.go), run by the Stop
+// hooks AFTER persist so the new quota sample is visible. nil-receiver-safe
+// and fail-open like persist/bootstrapSession above: a nil Runway driver is
+// a documented no-op, and DriveRunway itself swallows every compute/write
+// error — a runway recompute can never turn a Stop hook into a failure
+// (ADD §17.5, and §8.8's "native-hook mode cannot force a pause" — this
+// only records the forecast, it never interrupts the turn).
+func (d HookDeps) driveRunway(ctx context.Context, sessionID domain.SessionID) {
+	if d.Runway == nil {
+		return
+	}
+	d.Runway.DriveRunway(ctx, sessionID)
+}
+
 // --- auspex hook claude statusline ---------------------------------------
 
 // StatusLineResult is HandleStatusLine's return value.
@@ -255,6 +283,11 @@ func statusLineIngest(ctx context.Context, deps HookDeps, stdin []byte) (claudep
 
 	result := StatusLineResult{EventsNormalized: len(events)}
 	result.Persisted = deps.persist(ctx, events)
+	// M10: Claude's per-window quota lands HERE (the statusline snapshot),
+	// not at Stop — so this is the drive point that gives Claude a real
+	// two-sample burn rate across consecutive statusline renders. Fail-open
+	// and record-only, exactly like the Stop drive (runwaydrive.go, §8.8).
+	deps.driveRunway(ctx, snap.SessionID)
 	return snap, result, true
 }
 
@@ -319,11 +352,21 @@ func HandleStatusLineEmitLine(ctx context.Context, deps HookDeps, stdin []byte) 
 	} else if snap.ContextUsedPercent != nil {
 		ctxCurrent = snap.ContextUsedPercent
 	}
+	// M10 runway hint: a within-horizon exhaustion estimate from the latest
+	// persisted forecast, when one exists. Fail-open — a nil Runway driver
+	// or ok=false leaves the segment off, exactly like a forecast-cold card.
+	var runwayETA *int64
+	if deps.Runway != nil {
+		if hint, ok := deps.Runway.LatestRunwayHint(ctx, snap.SessionID); ok {
+			runwayETA = runwayStatusETA(hint)
+		}
+	}
 	return result, evaluation.StatusLineText(evaluation.StatusLineInput{
-		Model:                  model,
-		Card:                   card,
-		ContextUsedPercent:     ctxCurrent,
-		WeeklyLimitUsedPercent: snap.WeeklyLimitUsedPercent(),
+		Model:                    model,
+		Card:                     card,
+		ContextUsedPercent:       ctxCurrent,
+		WeeklyLimitUsedPercent:   snap.WeeklyLimitUsedPercent(),
+		RunwayTimeToLimitSeconds: runwayETA,
 	}), nil
 }
 
@@ -537,6 +580,10 @@ func HandleStop(ctx context.Context, deps HookDeps, stdin []byte) (StopResult, e
 	events := []v1.Event{event}
 	deps.stampOpenTurn(ctx, parsed.SessionID, events)
 	persisted := deps.persist(ctx, events)
+	// M10: recompute the runway forecast from this turn's just-committed
+	// quota telemetry (runwaydrive.go). Fail-open — never fails the Stop
+	// hook, and in native-hook mode records only (no forced pause, §8.8).
+	deps.driveRunway(ctx, parsed.SessionID)
 	return StopResult{EventsNormalized: 1, Persisted: persisted}, nil
 }
 
