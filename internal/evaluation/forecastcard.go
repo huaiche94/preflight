@@ -337,12 +337,42 @@ const (
 	ansiCyan    = "\x1b[36m"
 )
 
+// QuotaWindowStatus is one observed rolling quota window as the
+// statusline consumes it: the provider's own limit id plus the latest
+// measured used-percent and reset time. Both measurements follow the
+// nil-means-unknown rule; a window with no measured percent can never be
+// the rendered "worst" window (there is nothing honest to rank it by).
+type QuotaWindowStatus struct {
+	LimitID     string
+	UsedPercent *float64
+	ResetsAt    *time.Time
+}
+
+// SpendPaceStatus is the aggregated "today's spend + pace" observation
+// (issue #90 Phase A; the aggregation lives in internal/pace). TodayUSD
+// is pure aggregation of captured cost actuals for the current local
+// day; ProjectedEndOfDayUSD is the observed rate linearly stretched to
+// local midnight — a labeled pace, never a forecast promise (§7). A nil
+// SpendPaceStatus on the input means NO cost data was observed today and
+// the whole segment is omitted (unknown is not zero — never "$0.00 by
+// default").
+type SpendPaceStatus struct {
+	TodayUSD float64
+	// ProjectedEndOfDayUSD is nil when no honest rate exists (zero spend
+	// or no elapsed observation window) — the segment then shows today's
+	// figure alone, without a fabricated extrapolation.
+	ProjectedEndOfDayUSD *float64
+}
+
 // StatusLineInput carries the per-render inputs StatusLineText composes.
-// Model, ContextUsedPercent, and WeeklyLimitUsedPercent come from the
-// LIVE statusline snapshot (measurements); Card carries the persisted
-// per-turn forecast (predictions). Keeping them separate on the input is
-// what lets the context segment lead with the measurement and mark the
-// projection as the estimate it is.
+// Model, ContextUsedPercent, and QuotaWindows come from LIVE observations
+// (the statusline snapshot for Claude, the DB read-back for Codex);
+// Spend/RunwayTimeToLimitSeconds are aggregations over persisted
+// observations. Card carries the persisted per-turn evaluation — as of
+// the #90 Phase A priority flip it contributes ONLY the policy badge:
+// every per-turn forecast fragment (context P90 projection, worst-case
+// bound, D-08 threshold markers) stays on the card surfaces
+// (additionalContext / `auspex evaluate`), off the bar.
 type StatusLineInput struct {
 	Model string
 	Card  *ForecastCard
@@ -350,8 +380,19 @@ type StatusLineInput struct {
 	// exact token ratio over the provider's whole-percent rounding
 	// (D-14). nil means unknown, never zero.
 	ContextUsedPercent *float64
-	// WeeklyLimitUsedPercent is the live seven-day quota window (#27).
-	WeeklyLimitUsedPercent *float64
+	// QuotaWindows carries EVERY observed rolling quota window; the
+	// renderer leads with the worst (highest used-percent) one. Empty
+	// contributes no quota segment.
+	QuotaWindows []QuotaWindowStatus
+	// Spend is today's observed spend + pace for this line's provider.
+	// nil (no cost data today) omits the segment entirely.
+	Spend *SpendPaceStatus
+
+	// Now is the render instant (the caller's injected clock), used only
+	// to decide how a quota reset renders (same local day → clock time,
+	// else weekday). The zero value degrades to the weekday form — never
+	// a wall-clock read inside the renderer.
+	Now time.Time
 
 	// RunwayTimeToLimitSeconds is the independent Runway Predictor's
 	// uncalibrated P50 estimate of seconds until the binding quota window is
@@ -365,71 +406,53 @@ type StatusLineInput struct {
 	RunwayTimeToLimitSeconds *int64
 }
 
-// StatusLineText renders the one-line statusline display (issue #14
-// deliverable 4; icons and semantic colors are issue #29; v3 layout is
-// the owner's D-15 decision, issue #41):
+// StatusLineText renders the one-line statusline display. v4 layout is
+// the issue-#90 Phase A "aggregate-first" priority flip: the line LEADS
+// with the observational trio — worst quota window, runway ETA when
+// within-horizon, today's spend + pace — because those are the things
+// that are actually predictable at useful precision; the measured
+// context fill follows, and the per-turn surface is demoted to the
+// trailing policy badge alone:
 //
-//	ax» <model> │ ◷ weekly ~<pct>% │ context [<bar>] <cur>% (p90 ≤<pct>%) │ ✓ RUN
+//	ax» <model> │ ◷ 5h ~<pct>% (resets <when>) │ ⏳ runway ~<eta> │ today $<x> · pace → ~$<y> by 24:00 │ context [<bar>] <cur>% │ ✓ RUN
 //
-// model may be empty (renders as bare "ax»") and card may be nil (no
-// persisted evaluation for the session yet), so the status bar always has
-// something to show. The token segment was dropped in v3 (#41): the
-// cold-start P50 is effectively a constant (#42), and a number that never
-// moves carries no signal — the forecast stays on the card surfaces
-// (additionalContext / `auspex evaluate`) until #42 makes it move. The
-// context segment leads with the LIVE measurement (one decimal — it is
-// exact; bar tracks it too) whenever the snapshot carries one, with the
-// persisted projection reduced to a parenthetical upper bound. The
-// rendered bound is clamped to max(projected, measured): the projection
-// was anchored at an earlier turn's baseline, and a "worst case" below
-// the current measurement is a contradiction, not information (#41). The
-// label says p90 because that is the quantile the pipeline computes —
-// the owner's mock said p95, corrected per Constitution #2. A
-// projection-only render (no measurement) keeps the worst-case wording;
-// no projection contributes nothing rather than a fabricated 0%. The
-// D-08 threshold state ("(warn)"/"(checkpoint)") stays textual alongside
-// the yellow/red coloring so the signal survives grep and colorblindness
-// alike. weeklyLimitUsedPercent is the LIVE seven-day quota window from
-// the current snapshot (real data since #27), independent of the card so
-// it renders even on forecast-cold sessions; it stays uncolored until
-// #21's binding-constraint policy gives it honest thresholds. No
-// animation by design — the command re-runs only per assistant message
-// (300ms debounce, quiet when idle), so time-based frames would stutter
-// rather than animate. Exported as a package function rather than a
-// method so the nil-card fallback is one code path, not caller-side
-// duplication.
+// model may be empty (renders as bare "ax»") and every segment is
+// independently optional, so the status bar always has something to show
+// and never fabricates a number for a measurement it does not have.
+//
+// What the flip removed, deliberately (#90; goldens updated in step):
+// the v3 context segment's per-turn projection fragments — the
+// "(p90 ≤N%)" parenthetical, the projection-only "worst-case" wording,
+// and the D-08 "(warn)"/"(checkpoint)" markers — all derived from the
+// per-turn forecast whose cold-start error PR #79 measured at 7–9×
+// median. They remain on the card surfaces (AdditionalContext,
+// `auspex evaluate`), where they are labeled uncalibrated estimates; the
+// bar now shows only what was measured. The context segment renders the
+// live measurement (one decimal — it is exact; the bar tracks it) and
+// nothing else; no measurement contributes no segment rather than a
+// fabricated 0%.
+//
+// The quota segment leads with the WORST observed window (highest
+// used-percent — the binding constraint), labeled with a human name
+// ("5h"/"weekly") and its reset moment when observed. It stays uncolored
+// until #21's binding-constraint policy gives it honest thresholds. The
+// spend segment's extrapolation is always labeled "pace" with a "~"
+// (§7): it is today's observed average rate stretched to local midnight,
+// not a prediction of what the user will do. No animation by design —
+// the command re-runs only per assistant message (300ms debounce, quiet
+// when idle), so time-based frames would stutter rather than animate.
+// Exported as a package function rather than a method so the nil-card
+// fallback is one code path, not caller-side duplication.
 func StatusLineText(in StatusLineInput) string {
 	head := ansiCyan + "ax»" + ansiReset
 	if in.Model != "" {
 		head += " " + in.Model
 	}
 	parts := []string{head}
-	if in.WeeklyLimitUsedPercent != nil {
-		parts = append(parts, fmt.Sprintf("◷ weekly ~%.0f%%", *in.WeeklyLimitUsedPercent))
-	}
-	var projected *float64
-	if in.Card != nil {
-		projected = in.Card.ContextProjectedP90
-	}
-	var seg string
-	switch {
-	case in.ContextUsedPercent != nil:
-		cur := *in.ContextUsedPercent
-		seg = fmt.Sprintf("context %s %.1f%%", contextBar(cur), cur)
-		if projected != nil {
-			seg += fmt.Sprintf(" (p90 ≤%.0f%%)", math.Max(*projected, cur))
-		}
-	case projected != nil:
-		seg = fmt.Sprintf("context worst-case %s ~%.0f%%", contextBar(*projected), *projected)
-	}
-	if seg != "" {
-		switch {
-		case in.Card != nil && in.Card.ContextCheckpointThresholdExceeded:
-			seg = ansiRed + seg + " (checkpoint)" + ansiReset
-		case in.Card != nil && in.Card.ContextWarnThresholdExceeded:
-			seg = ansiYellow + seg + " (warn)" + ansiReset
-		default:
-			seg = ansiGreen + seg + ansiReset
+	if w, ok := worstQuotaWindow(in.QuotaWindows); ok {
+		seg := fmt.Sprintf("◷ %s ~%.0f%%", quotaWindowLabel(w.LimitID), *w.UsedPercent)
+		if w.ResetsAt != nil {
+			seg += " (resets " + quotaResetText(*w.ResetsAt, in.Now) + ")"
 		}
 		parts = append(parts, seg)
 	}
@@ -440,10 +463,80 @@ func StatusLineText(in StatusLineInput) string {
 		// label so it never reads as a calibrated countdown (§7).
 		parts = append(parts, ansiYellow+"⏳ runway ~"+runwayETAText(*in.RunwayTimeToLimitSeconds)+ansiReset)
 	}
+	if in.Spend != nil {
+		seg := fmt.Sprintf("today $%.2f", in.Spend.TodayUSD)
+		if in.Spend.ProjectedEndOfDayUSD != nil {
+			// "by 24:00" is ISO 8601's end-of-day: the pace targets local
+			// midnight, the fixed day-level horizon pacing is about.
+			seg += fmt.Sprintf(" · pace → ~$%.2f by 24:00", *in.Spend.ProjectedEndOfDayUSD)
+		}
+		parts = append(parts, seg)
+	}
+	if in.ContextUsedPercent != nil {
+		cur := *in.ContextUsedPercent
+		parts = append(parts, ansiGreen+fmt.Sprintf("context %s %.1f%%", contextBar(cur), cur)+ansiReset)
+	}
 	if in.Card != nil && in.Card.PolicyAction != "" {
 		parts = append(parts, policyBadge(in.Card.PolicyAction))
 	}
 	return strings.Join(parts, ansiDim+" │ "+ansiReset)
+}
+
+// worstQuotaWindow picks the window with the highest measured
+// used-percent — the binding constraint the user actually needs to watch
+// (§15.5's conservative worst-window discipline applied to display).
+// Windows without a measured percent cannot be ranked and are skipped;
+// ok=false when nothing measurable exists. Ties break toward the earlier
+// window in the (LimitID-sorted, per the producers) input for a
+// deterministic render.
+func worstQuotaWindow(windows []QuotaWindowStatus) (QuotaWindowStatus, bool) {
+	var worst QuotaWindowStatus
+	found := false
+	for _, w := range windows {
+		if w.UsedPercent == nil {
+			continue
+		}
+		if !found || *w.UsedPercent > *worst.UsedPercent {
+			worst, found = w, true
+		}
+	}
+	return worst, found
+}
+
+// quotaWindowLabel maps known provider limit ids to the short human
+// names the crowded bar can afford; an unknown id renders as itself — a
+// new window must never be dropped or mislabeled while waiting for a
+// name (the same open-set rule the #21 parser follows).
+func quotaWindowLabel(limitID string) string {
+	switch limitID {
+	case "five_hour", "primary": // claude / codex 5-hour rolling windows
+		return "5h"
+	case "seven_day", "secondary": // claude / codex weekly windows
+		return "weekly"
+	}
+	return limitID
+}
+
+// quotaResetText renders a window's reset moment relative to now: a
+// clock time ("18:00") when the reset lands on the same local calendar
+// day, else the weekday ("Thu") — day-level precision is all a
+// multi-day-away reset deserves on a status bar. A zero now (no clock
+// injected) degrades to the weekday form rather than reading the wall
+// clock here.
+func quotaResetText(resetsAt, now time.Time) string {
+	loc := time.Local
+	if !now.IsZero() {
+		loc = now.Location()
+	}
+	local := resetsAt.In(loc)
+	if !now.IsZero() {
+		ny, nm, nd := now.In(loc).Date()
+		ry, rm, rd := local.Date()
+		if ny == ry && nm == rm && nd == rd {
+			return local.Format("15:04")
+		}
+	}
+	return local.Format("Mon")
 }
 
 // runwayETAText renders a seconds count as a compact, legible estimate —

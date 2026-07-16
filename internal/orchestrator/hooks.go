@@ -143,6 +143,16 @@ type HookDeps struct {
 	// interactive turn cannot be interrupted, §8.8): it only records the
 	// forecast the NEXT turn's UserPromptSubmit gate reads.
 	Runway RunwayDriver
+
+	// Pace optionally enables the issue-#90 Phase A "today's spend +
+	// pace" statusline segment (pacestatus.go): when non-nil, both
+	// statusline paths (Claude --emit-line, `hook codex status`) read
+	// today's aggregated cost actuals for their provider and render the
+	// spend/pace segment. nil omits the segment entirely — the same
+	// nil-is-a-documented-degrade convention every optional field here
+	// follows, and the honest render for a composition with no events
+	// store to aggregate over.
+	Pace PaceReader
 }
 
 // OpenTurnResolver resolves a session's latest started turn. ok=false
@@ -298,20 +308,23 @@ func statusLineIngest(ctx context.Context, deps HookDeps, stdin []byte) (claudep
 // bar). It performs exactly HandleStatusLine's ingest (same parse, same
 // normalize, same best-effort persist — statusLineIngest is the single
 // shared implementation, so the two cannot drift) and additionally
-// composes the one-line display text:
+// composes the one-line display text (v4, the #90 Phase A
+// observation-first layout — see evaluation.StatusLineText for the full
+// segment contract):
 //
-//	ax» <model> │ ◷ weekly ~<pct>% │ context [<bar>] <cur>% (p90 ≤<pct>%) │ ✓ RUN
+//	ax» <model> │ ◷ 5h ~<pct>% (resets <when>) │ ⏳ runway ~<eta> │ today $<x> · pace → ~$<y> by 24:00 │ context [<bar>] <cur>% │ ✓ RUN
 //
-// using the latest persisted evaluation for the session when one exists
-// (deps.Forecast.LatestForecastCard), else just "ax» <model>" plus the
-// weekly and measured-context segments when the snapshot carried them
-// (those segments are live snapshot data, not card data). Every
-// degradation is fail-open into a shorter line, never an error and never
-// an empty line: malformed stdin renders bare "ax»", a missing model
-// omits the model segment, a missing/errored card omits the forecast
-// segments — a status line must keep rendering even when Auspex cannot
-// parse its own input (the same ADD §17.5 discipline HandleStatusLine
-// already documents).
+// The quota windows and context measurement come straight from the live
+// snapshot; the spend/pace segment aggregates persisted cost actuals via
+// deps.Pace; the runway hint reads the latest persisted forecast; the
+// persisted evaluation card (deps.Forecast.LatestForecastCard)
+// contributes only the trailing policy badge — its per-turn forecast
+// numbers stay on the card surfaces (#90). Every degradation is
+// fail-open into a shorter line, never an error and never an empty line:
+// malformed stdin renders bare "ax»", a missing model omits the model
+// segment, a missing/errored card omits the badge — a status line must
+// keep rendering even when Auspex cannot parse its own input (the same
+// ADD §17.5 discipline HandleStatusLine already documents).
 func HandleStatusLineEmitLine(ctx context.Context, deps HookDeps, stdin []byte) (StatusLineResult, string, error) {
 	snap, result, parsedOK := statusLineIngest(ctx, deps, stdin)
 	if !parsedOK {
@@ -335,8 +348,8 @@ func HandleStatusLineEmitLine(ctx context.Context, deps HookDeps, stdin []byte) 
 		// cold start and a card-read failure look identical here by
 		// design; the status bar is no place for an error message.
 	}
-	// The context-measurement and weekly-limit inputs come straight from
-	// the live snapshot (real observed data since #27), NOT from the
+	// The context-measurement and quota-window inputs come straight from
+	// the live snapshot (real observed data since #27/#21), NOT from the
 	// card — they render even when the session has no forecast yet. The
 	// current context percent prefers the exact token ratio over the
 	// provider's whole-percent rounding (D-14), mirroring the predictor's
@@ -352,6 +365,14 @@ func HandleStatusLineEmitLine(ctx context.Context, deps HookDeps, stdin []byte) 
 	} else if snap.ContextUsedPercent != nil {
 		ctxCurrent = snap.ContextUsedPercent
 	}
+	windows := make([]evaluation.QuotaWindowStatus, 0, len(snap.RateLimitWindows))
+	for _, w := range snap.RateLimitWindows {
+		windows = append(windows, evaluation.QuotaWindowStatus{
+			LimitID:     w.LimitID,
+			UsedPercent: w.UsedPercent,
+			ResetsAt:    w.ResetsAt,
+		})
+	}
 	// M10 runway hint: a within-horizon exhaustion estimate from the latest
 	// persisted forecast, when one exists. Fail-open — a nil Runway driver
 	// or ok=false leaves the segment off, exactly like a forecast-cold card.
@@ -365,7 +386,9 @@ func HandleStatusLineEmitLine(ctx context.Context, deps HookDeps, stdin []byte) 
 		Model:                    model,
 		Card:                     card,
 		ContextUsedPercent:       ctxCurrent,
-		WeeklyLimitUsedPercent:   snap.WeeklyLimitUsedPercent(),
+		QuotaWindows:             windows,
+		Spend:                    deps.spendPaceStatus(ctx, claudetelemetry.Provider),
+		Now:                      deps.renderNow(),
 		RunwayTimeToLimitSeconds: runwayETA,
 	}), nil
 }

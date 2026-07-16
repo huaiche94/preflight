@@ -248,10 +248,14 @@ func TestHookHandlers_HighContextCardRendersThresholdState(t *testing.T) {
 		t.Fatalf("HandleStatusLineEmitLine: %v", err)
 	}
 	// normal.json carries exact context tokens (42000+1800 of 200000 =
-	// 21.9%), so the measurement leads (bar tracks it) and the persisted
-	// projection renders as the parenthetical upper bound (D-15, #41).
-	if !strings.Contains(line, "context [████················] 21.9% (p90 ≤91%) (warn)") {
-		t.Errorf("emit-line = %q, want the measured-first context segment", line)
+	// 21.9%): the statusline renders the MEASUREMENT alone — since the
+	// #90 Phase A flip the card's projection/threshold fragments stay on
+	// the card surfaces (asserted above) and never reach the bar.
+	if !strings.Contains(line, "context [████················] 21.9%") {
+		t.Errorf("emit-line = %q, want the measured context segment", line)
+	}
+	if strings.Contains(line, "p90") || strings.Contains(line, "(warn)") {
+		t.Errorf("emit-line = %q, must not carry per-turn forecast fragments (#90)", line)
 	}
 }
 
@@ -266,12 +270,13 @@ func TestHookHandlers_StatusLineEmitLine_SnapshotSegmentsWhenNoForecast(t *testi
 	if result.EventsNormalized != 4 {
 		t.Errorf("EventsNormalized = %d, want 4 (ingest identical to HandleStatusLine)", result.EventsNormalized)
 	}
-	// normal.json's model.display_name is "Opus 4.1", its seven_day
-	// window reads 11.2%, and its context tokens read 21.9% — the weekly
-	// and measured-context segments are snapshot data, so they render
-	// even with no Forecast wired at all (no parenthetical bound without
-	// a persisted projection).
-	if want := statusBrand + " Opus 4.1" + statusSep + "◷ weekly ~11%" + statusSep + statusCtx219; line != want {
+	// normal.json's model.display_name is "Opus 4.1", its five_hour
+	// window reads 42.5% (the worst window — #90 leads with it; resets
+	// 2026-07-12T18:00Z, a Sunday, not the fake clock's day), and its
+	// context tokens read 21.9% — the quota and measured-context segments
+	// are snapshot data, so they render even with no Forecast wired at
+	// all.
+	if want := statusBrand + " Opus 4.1" + statusSep + statusQuota5h + statusSep + statusCtx219; line != want {
 		t.Errorf("line = %q, want %q", line, want)
 	}
 }
@@ -290,6 +295,11 @@ const (
 	// normal.json's measured context: 42000+1800 of 200000 = 21.9%,
 	// 21.9/5 → 4 filled cells.
 	statusCtx219 = "\x1b[32mcontext [████················] 21.9%" + statusReset
+	// normal.json's worst quota window (#90 v4 lead segment): five_hour
+	// at 42.5% (%.0f rounds half-to-even → 42), resetting Sun 2026-07-12
+	// 18:00 UTC — a different day than the fake clock's 2026-01-01, so
+	// the reset renders as the weekday.
+	statusQuota5h = "◷ 5h ~42% (resets Sun)"
 )
 
 func TestHookHandlers_StatusLineEmitLine_WithLatestForecast(t *testing.T) {
@@ -301,7 +311,7 @@ func TestHookHandlers_StatusLineEmitLine_WithLatestForecast(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HandleStatusLineEmitLine: %v", err)
 	}
-	if want := statusBrand + " Opus 4.1" + statusSep + "◷ weekly ~11%" + statusSep + statusCtx219 + statusSep + statusBadgeWarn; line != want {
+	if want := statusBrand + " Opus 4.1" + statusSep + statusQuota5h + statusSep + statusCtx219 + statusSep + statusBadgeWarn; line != want {
 		t.Errorf("line = %q, want %q", line, want)
 	}
 	if forecast.gotSessionID == "" {
@@ -320,7 +330,7 @@ func TestHookHandlers_StatusLineEmitLine_ColdStartAndErrorDegradeToSnapshotSegme
 		if err != nil {
 			t.Fatalf("%s: HandleStatusLineEmitLine: %v", name, err)
 		}
-		if line != statusBrand+" Opus 4.1"+statusSep+"◷ weekly ~11%"+statusSep+statusCtx219 {
+		if line != statusBrand+" Opus 4.1"+statusSep+statusQuota5h+statusSep+statusCtx219 {
 			t.Errorf("%s: line = %q, want the snapshot-only fallback (no forecast segments)", name, line)
 		}
 	}
