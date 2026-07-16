@@ -147,8 +147,15 @@ func TestEvaluateTurn_WarmedForecaster_CheckpointThresholdFires(t *testing.T) {
 	if ac := card.AdditionalContext(); !strings.Contains(ac, "context: P90 ~97% of window (projected) — CHECKPOINT threshold exceeded") {
 		t.Errorf("AdditionalContext missing the threshold state:\n%s", ac)
 	}
-	if line := evaluation.StatusLineText(evaluation.StatusLineInput{Model: "Opus 4.1", Card: &card}); !strings.Contains(line, "context worst-case [███████████████████·] ~97% (checkpoint)") {
-		t.Errorf("StatusLineText missing the context segment: %q", line)
+	// #90 Phase A: the per-turn context projection is demoted to the card
+	// surfaces — the statusline renders no forecast fragment from it, only
+	// the policy badge (the gate's decision, not a forecast number).
+	line := evaluation.StatusLineText(evaluation.StatusLineInput{Model: "Opus 4.1", Card: &card})
+	if strings.Contains(line, "context") {
+		t.Errorf("StatusLineText renders a per-turn context projection, which #90 demoted off the bar: %q", line)
+	}
+	if !strings.Contains(line, string(app.PolicyCheckpointAndRun)) {
+		t.Errorf("StatusLineText missing the policy badge: %q", line)
 	}
 }
 

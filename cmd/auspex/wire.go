@@ -35,6 +35,7 @@ import (
 	"github.com/huaiche94/auspex/internal/httpapi"
 	"github.com/huaiche94/auspex/internal/idgen"
 	"github.com/huaiche94/auspex/internal/orchestrator"
+	"github.com/huaiche94/auspex/internal/pace"
 	"github.com/huaiche94/auspex/internal/paths"
 	"github.com/huaiche94/auspex/internal/pause"
 	"github.com/huaiche94/auspex/internal/policy"
@@ -272,6 +273,14 @@ func buildRootCmd(ctx context.Context) (root *cobra.Command, closeFn func() erro
 			// (§8.8). The stateless runway.Scorer/DefaultHorizon defaults
 			// apply (nil Scorer, zero Horizon).
 			Runway: &orchestrator.RunwayForecastStore{DB: db, Clock: clk},
+			// #90 Phase A: today's spend + pace, aggregated read-only from
+			// the SAME events table the hooks write, over the same injected
+			// clock (which defines "today" in the process's local zone).
+			//
+			// FLAG (composition-root reconciliation): appended line only —
+			// reuses already-constructed db/clk instances; merges cleanly
+			// with any other agent's additive edit to this literal.
+			Pace: &pace.Store{DB: db, Clock: clk},
 			// The REAL evaluation.Service doubles as the issue-#14
 			// forecast-card source (it satisfies orchestrator.
 			// ForecastCardSource — ForecastCard/LatestForecastCard read

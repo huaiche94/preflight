@@ -96,12 +96,16 @@ func TestCodexStatusStore_ResolvesLatestSessionAndObservations(t *testing.T) {
 	persistCodexObservation(t, db, codexObservation("ev-ctx-2", "codex-new", v1.EventProviderContextObserved, base, map[string]any{
 		"used_tokens": 44374, "window_tokens": 353400,
 	}))
-	// Quota: a primary (ignored by the weekly segment) and a secondary.
+	// Quota: a primary and a secondary window, plus a stale secondary
+	// sample the newest one must shadow.
+	persistCodexObservation(t, db, codexObservation("ev-q-0", "codex-new", v1.EventProviderQuotaObserved, base.Add(-time.Minute), map[string]any{
+		"limit_id": "secondary", "used_percent": 40.0,
+	}))
 	persistCodexObservation(t, db, codexObservation("ev-q-1", "codex-new", v1.EventProviderQuotaObserved, base, map[string]any{
 		"limit_id": "primary", "used_percent": 13.0,
 	}))
 	persistCodexObservation(t, db, codexObservation("ev-q-2", "codex-new", v1.EventProviderQuotaObserved, base, map[string]any{
-		"limit_id": "secondary", "used_percent": 49.2,
+		"limit_id": "secondary", "used_percent": 49.2, "resets_at": "2026-07-18T00:00:00Z",
 	}))
 
 	store := &orchestrator.CodexStatusStore{DB: db}
@@ -124,8 +128,19 @@ func TestCodexStatusStore_ResolvesLatestSessionAndObservations(t *testing.T) {
 	if diff := *snap.ContextUsedPercent - wantPct; diff > 0.001 || diff < -0.001 {
 		t.Errorf("ContextUsedPercent = %v, want ~%v", *snap.ContextUsedPercent, wantPct)
 	}
-	if snap.WeeklyUsedPercent == nil || *snap.WeeklyUsedPercent != 49.2 {
-		t.Errorf("WeeklyUsedPercent = %v, want 49.2 (the secondary window)", snap.WeeklyUsedPercent)
+	// #90: every observed window comes back, sorted by LimitID, each with
+	// its NEWEST sample (the stale 40.0 secondary is shadowed).
+	if len(snap.QuotaWindows) != 2 {
+		t.Fatalf("QuotaWindows = %+v, want primary+secondary", snap.QuotaWindows)
+	}
+	if w := snap.QuotaWindows[0]; w.LimitID != "primary" || w.UsedPercent == nil || *w.UsedPercent != 13.0 {
+		t.Errorf("QuotaWindows[0] = %+v, want primary at 13.0", w)
+	}
+	if w := snap.QuotaWindows[1]; w.LimitID != "secondary" || w.UsedPercent == nil || *w.UsedPercent != 49.2 {
+		t.Errorf("QuotaWindows[1] = %+v, want secondary at 49.2 (newest sample)", w)
+	}
+	if w := snap.QuotaWindows[1]; w.ResetsAt == nil || !w.ResetsAt.Equal(time.Date(2026, 7, 18, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("QuotaWindows[1].ResetsAt = %v, want the persisted reset", w.ResetsAt)
 	}
 
 	// A cwd outside every worktree resolves nothing.
@@ -151,8 +166,8 @@ func TestCodexStatusStore_MissingObservationsStayNil(t *testing.T) {
 	if !ok {
 		t.Fatal("ok = false")
 	}
-	if snap.ContextUsedPercent != nil || snap.WeeklyUsedPercent != nil {
-		t.Errorf("percentages fabricated with no observations: %+v", snap)
+	if snap.ContextUsedPercent != nil || snap.QuotaWindows != nil {
+		t.Errorf("measurements fabricated with no observations: %+v", snap)
 	}
 	if snap.Model != "" {
 		t.Errorf("Model = %q, want empty for a NULL column", snap.Model)

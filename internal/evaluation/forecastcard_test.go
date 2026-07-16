@@ -320,19 +320,15 @@ func TestAdditionalContext_ReasonCodesCapped(t *testing.T) {
 	}
 }
 
-// TestStatusLineText covers the emit-line composition matrix: nil card
-// (cold start), missing model, and the full line.
+// TestStatusLineText covers the emit-line composition matrix for the v4
+// observation-first layout (#90 Phase A): the line leads with the worst
+// quota window, runway, and today's spend + pace; the measured context
+// follows; the card contributes ONLY the policy badge — every per-turn
+// forecast fragment (context projection, worst-case bound, D-08 markers)
+// was deliberately demoted off the bar (goldens updated in step with the
+// flip, not accidentally).
 func TestStatusLineText(t *testing.T) {
 	card := fullTestCard()
-
-	// A card whose projection carries no threshold decision renders the
-	// percentage without a threshold marker; the checkpoint marker
-	// outranks warn.
-	noThresholdCard := fullTestCard()
-	noThresholdCard.ContextWarnThresholdExceeded = false
-	checkpointCard := fullTestCard()
-	checkpointCard.ContextProjectedP90 = ptrF64(97)
-	checkpointCard.ContextCheckpointThresholdExceeded = true
 
 	// Byte-exact ANSI pins (issue #29): the codes are written out
 	// explicitly here — NOT imported from the package under test — so a
@@ -344,24 +340,22 @@ func TestStatusLineText(t *testing.T) {
 		sep    = dim + " │ " + reset   // dim separator
 		green  = "\x1b[32m"
 		yellow = "\x1b[33m"
-		red    = "\x1b[31m"
 		// D-15 (issue #41): the policy segment shows ONLY the active
 		// action, lit with its icon and semantic color.
 		badgeRun  = green + "✓ RUN" + reset
 		badgeWarn = yellow + "⚠ WARN" + reset
-		// 20-cell bars: 91% → 18 filled, 97% → 19 filled; the measured
-		// 26.8% → 5 filled, 14.8% → 3 filled.
-		bar91 = "[██████████████████··]"
-		bar97 = "[███████████████████·]"
+		// 20-cell bar: the measured 26.8% → 5 filled cells.
 		bar27 = "[█████···············]"
-		bar15 = "[███·················]"
 	)
 	weekly := 31.4
+	fiveHour := 42.5
 	ctxCur := 26.8173
-	staleCur := 14.84
-	staleCard := fullTestCard()
-	staleCard.ContextProjectedP90 = ptrF64(11)
-	staleCard.ContextWarnThresholdExceeded = false
+	// A fixed render instant so the reset rendering is deterministic:
+	// 2026-07-16 (a Thursday) 09:00 UTC.
+	now := time.Date(2026, 7, 16, 9, 0, 0, 0, time.UTC)
+	sameDayReset := time.Date(2026, 7, 16, 18, 0, 0, 0, time.UTC)
+	laterReset := time.Date(2026, 7, 19, 2, 0, 0, 0, time.UTC) // Sunday
+	projected := 3.7512
 	cases := []struct {
 		name string
 		in   evaluation.StatusLineInput
@@ -369,35 +363,66 @@ func TestStatusLineText(t *testing.T) {
 	}{
 		{"no model no card", evaluation.StatusLineInput{}, brand},
 		{"model only", evaluation.StatusLineInput{Model: "Opus 4.1"}, brand + " Opus 4.1"},
-		// D-15: no token segment on the line (#41/#42); without a live
-		// measurement the context segment keeps the projection-only
-		// worst-case wording.
-		{"full", evaluation.StatusLineInput{Model: "Opus 4.1", Card: &card},
-			brand + " Opus 4.1" + sep + yellow + "context worst-case " + bar91 + " ~91% (warn)" + reset + sep + badgeWarn},
-		{"context without threshold decision", evaluation.StatusLineInput{Model: "Opus 4.1", Card: &noThresholdCard},
-			brand + " Opus 4.1" + sep + green + "context worst-case " + bar91 + " ~91%" + reset + sep + badgeWarn},
-		{"checkpoint marker outranks warn", evaluation.StatusLineInput{Model: "Opus 4.1", Card: &checkpointCard},
-			brand + " Opus 4.1" + sep + red + "context worst-case " + bar97 + " ~97% (checkpoint)" + reset + sep + badgeWarn},
-		// D-15: the measurement leads (one decimal — it is exact; the
-		// bar tracks it), the projection is a parenthetical upper bound.
-		{"measured context leads, projection parenthetical", evaluation.StatusLineInput{Model: "Opus 4.1", Card: &card, ContextUsedPercent: &ctxCur},
-			brand + " Opus 4.1" + sep + yellow + "context " + bar27 + " 26.8% (p90 ≤91%) (warn)" + reset + sep + badgeWarn},
-		// A measurement renders even with no card at all — it is live
-		// snapshot data; no parenthetical without a projection.
+		// #90: a card alone contributes only the policy badge — its
+		// per-turn projection (91%, warn) renders nothing here.
+		{"card contributes only the badge", evaluation.StatusLineInput{Model: "Opus 4.1", Card: &card},
+			brand + " Opus 4.1" + sep + badgeWarn},
+		// A measurement renders with or without a card — it is live
+		// observation data; no per-turn parenthetical ever attaches.
 		{"measured context without card", evaluation.StatusLineInput{Model: "Opus 4.1", ContextUsedPercent: &ctxCur},
 			brand + " Opus 4.1" + sep + green + "context " + bar27 + " 26.8%" + reset},
-		// A stale persisted projection below the live measurement clamps
-		// to the measurement — "worst case" can never read below
-		// "current" (#41).
-		{"stale projection clamps to measurement", evaluation.StatusLineInput{Model: "Opus 4.1", Card: &staleCard, ContextUsedPercent: &staleCur},
-			brand + " Opus 4.1" + sep + green + "context " + bar15 + " 14.8% (p90 ≤15%)" + reset + sep + badgeWarn},
-		// The weekly segment is snapshot data, independent of the card:
-		// it renders on a forecast-cold session (uncolored until #21
-		// gives it honest thresholds) and slots right after the model.
-		{"weekly limit without card", evaluation.StatusLineInput{Model: "Opus 4.1", WeeklyLimitUsedPercent: &weekly},
+		{"measured context with card", evaluation.StatusLineInput{Model: "Opus 4.1", Card: &card, ContextUsedPercent: &ctxCur},
+			brand + " Opus 4.1" + sep + green + "context " + bar27 + " 26.8%" + reset + sep + badgeWarn},
+		// The quota segment is observation data, independent of the card
+		// (uncolored until #21 gives it honest thresholds). One window
+		// renders as itself…
+		{"single quota window", evaluation.StatusLineInput{Model: "Opus 4.1",
+			QuotaWindows: []evaluation.QuotaWindowStatus{{LimitID: "seven_day", UsedPercent: &weekly}}},
 			brand + " Opus 4.1" + sep + "◷ weekly ~31%"},
-		{"full with weekly", evaluation.StatusLineInput{Model: "Opus 4.1", Card: &card, WeeklyLimitUsedPercent: &weekly},
-			brand + " Opus 4.1" + sep + "◷ weekly ~31%" + sep + yellow + "context worst-case " + bar91 + " ~91% (warn)" + reset + sep + badgeWarn},
+		// …and with several, the WORST (highest used-percent) window
+		// leads — the binding constraint, not a fixed favorite.
+		{"worst window wins", evaluation.StatusLineInput{Model: "Opus 4.1",
+			QuotaWindows: []evaluation.QuotaWindowStatus{
+				{LimitID: "five_hour", UsedPercent: &fiveHour},
+				{LimitID: "seven_day", UsedPercent: &weekly},
+			}},
+			brand + " Opus 4.1" + sep + "◷ 5h ~42%"},
+		// A same-local-day reset renders as clock time; a multi-day-away
+		// reset renders as the weekday alone.
+		{"reset same day", evaluation.StatusLineInput{Model: "Opus 4.1", Now: now,
+			QuotaWindows: []evaluation.QuotaWindowStatus{{LimitID: "five_hour", UsedPercent: &fiveHour, ResetsAt: &sameDayReset}}},
+			brand + " Opus 4.1" + sep + "◷ 5h ~42% (resets 18:00)"},
+		{"reset later in the week", evaluation.StatusLineInput{Model: "Opus 4.1", Now: now,
+			QuotaWindows: []evaluation.QuotaWindowStatus{{LimitID: "seven_day", UsedPercent: &weekly, ResetsAt: &laterReset}}},
+			brand + " Opus 4.1" + sep + "◷ weekly ~31% (resets Sun)"},
+		// A window with no measured percent cannot be the worst window —
+		// no fabricated 0% (unknown is not zero).
+		{"unmeasured windows contribute nothing", evaluation.StatusLineInput{Model: "Opus 4.1",
+			QuotaWindows: []evaluation.QuotaWindowStatus{{LimitID: "five_hour", ResetsAt: &sameDayReset}}},
+			brand + " Opus 4.1"},
+		// Spend + pace: aggregation of today's cost actuals; the
+		// extrapolation is labeled a pace with "~" (§7), targeting local
+		// end-of-day.
+		{"spend with pace", evaluation.StatusLineInput{Model: "Opus 4.1",
+			Spend: &evaluation.SpendPaceStatus{TodayUSD: 1.4049, ProjectedEndOfDayUSD: &projected}},
+			brand + " Opus 4.1" + sep + "today $1.40 · pace → ~$3.75 by 24:00"},
+		// No honest rate → today's figure alone, no fabricated pace.
+		{"spend without pace", evaluation.StatusLineInput{Model: "Opus 4.1",
+			Spend: &evaluation.SpendPaceStatus{TodayUSD: 0}},
+			brand + " Opus 4.1" + sep + "today $0.00"},
+		// The full trio leads in order — quota, runway, spend — then the
+		// measured context, then the demoted policy badge.
+		{"observational trio leads", evaluation.StatusLineInput{Model: "Opus 4.1", Card: &card,
+			ContextUsedPercent: &ctxCur, Now: now,
+			QuotaWindows:             []evaluation.QuotaWindowStatus{{LimitID: "five_hour", UsedPercent: &fiveHour, ResetsAt: &sameDayReset}},
+			RunwayTimeToLimitSeconds: ptrI64(480),
+			Spend:                    &evaluation.SpendPaceStatus{TodayUSD: 1.4049, ProjectedEndOfDayUSD: &projected}},
+			brand + " Opus 4.1" + sep +
+				"◷ 5h ~42% (resets 18:00)" + sep +
+				yellow + "⏳ runway ~8m" + reset + sep +
+				"today $1.40 · pace → ~$3.75 by 24:00" + sep +
+				green + "context " + bar27 + " 26.8%" + reset + sep +
+				badgeWarn},
 	}
 	for _, tc := range cases {
 		if got := evaluation.StatusLineText(tc.in); got != tc.want {
@@ -406,8 +431,7 @@ func TestStatusLineText(t *testing.T) {
 	}
 
 	// A card without a context projection contributes only its action —
-	// an unknown projection contributes no "context ~0%" segment
-	// (unknown is not zero).
+	// same as any other card now (#90 made this the rule, not the edge).
 	coldCard := evaluation.ForecastCard{PolicyAction: app.PolicyRun}
 	if got, want := evaluation.StatusLineText(evaluation.StatusLineInput{Model: "Sonnet 4", Card: &coldCard}), brand+" Sonnet 4"+sep+badgeRun; got != want {
 		t.Errorf("cold card: StatusLineText = %q, want %q", got, want)
@@ -421,9 +445,9 @@ func TestStatusLineText(t *testing.T) {
 	}
 }
 
-// TestStatusLineText_ContextBarFill: the 20-cell bar tracks the projected
+// TestStatusLineText_ContextBarFill: the 20-cell bar tracks the measured
 // percentage — one cell per 5%, rounded (D-13 v2.1) — and clamps rather
-// than overflowing on out-of-range projections.
+// than overflowing on out-of-range measurements.
 func TestStatusLineText_ContextBarFill(t *testing.T) {
 	for pct, bar := range map[float64]string{
 		0:   "[····················]",
@@ -434,8 +458,8 @@ func TestStatusLineText_ContextBarFill(t *testing.T) {
 		100: "[████████████████████]",
 		130: "[████████████████████]", // clamped, never overflows
 	} {
-		card := evaluation.ForecastCard{ContextProjectedP90: &pct, PolicyAction: app.PolicyRun}
-		if got := evaluation.StatusLineText(evaluation.StatusLineInput{Model: "M", Card: &card}); !strings.Contains(got, "context worst-case "+bar+" ") {
+		p := pct
+		if got := evaluation.StatusLineText(evaluation.StatusLineInput{Model: "M", ContextUsedPercent: &p}); !strings.Contains(got, "context "+bar+" ") {
 			t.Errorf("pct %.0f: line %q missing bar %q", pct, got, bar)
 		}
 	}

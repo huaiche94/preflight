@@ -199,6 +199,18 @@ type HookSupport struct {
 	// sees the cold-start zero forecast), per HookDeps.Runway's own
 	// documented degrade contract.
 	Runway orchestrator.RunwayDriver
+
+	// Pace optionally enables the issue-#90 "today's spend + pace"
+	// statusline segment (orchestrator.HookDeps.Pace, pacestatus.go):
+	// when non-nil, both statusline surfaces read today's aggregated cost
+	// actuals via it. The real value is an internal/pace.Store over the
+	// same *sqlite.DB every hook seam writes through; nil omits the
+	// segment entirely, per HookDeps.Pace's own documented degrade
+	// contract.
+	//
+	// FLAG (composition-root reconciliation, #90 Phase A): appended field
+	// — additive only, no existing field moved or retyped.
+	Pace orchestrator.PaceReader
 }
 
 // DiagnosticsSupport bundles the optional collaborators
@@ -298,6 +310,7 @@ func (a *App) RootCmd() *cobra.Command {
 		OpenTurns:    a.services.Hooks.OpenTurns,
 		CodexStatus:  a.services.Hooks.CodexStatus,
 		Runway:       a.services.Hooks.Runway,
+		Pace:         a.services.Hooks.Pace,
 	}
 	if hookDeps.Clock == nil {
 		hookDeps.Clock = clock.New()

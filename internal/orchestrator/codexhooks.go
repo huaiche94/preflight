@@ -275,7 +275,7 @@ type CodexStatusReader interface {
 
 // CodexStatusSnapshot is the numbers-only display state
 // CodexStatusReader resolves: the session identity plus the latest
-// persisted context and weekly-quota measurements.
+// persisted context and quota-window measurements.
 type CodexStatusSnapshot struct {
 	SessionID domain.SessionID
 	Model     string // "" when provider_sessions has none recorded
@@ -283,15 +283,17 @@ type CodexStatusSnapshot struct {
 	// provider.context.observed event's used/window tokens. nil when no
 	// context observation exists (unknown is not zero).
 	ContextUsedPercent *float64
-	// WeeklyUsedPercent is the latest provider.quota.observed
-	// used_percent for the secondary (weekly) window. nil when none.
-	WeeklyUsedPercent *float64
+	// QuotaWindows is the latest provider.quota.observed measurement per
+	// limit window (#90: the statusline leads with the worst one). nil
+	// when none exist.
+	QuotaWindows []evaluation.QuotaWindowStatus
 }
 
 // HandleCodexStatus implements `auspex hook codex status` (issue #9 Phase
-// 1b): render the one-line
+// 1b; v4 observation-first layout per issue #90 Phase A): render the
+// one-line
 //
-//	ax» <model> │ ◷ weekly ~<pct>% │ context [<bar>] <cur>% │ <verdict>
+//	ax» <model> │ ◷ 5h ~<pct>% (resets <when>) │ ⏳ runway ~<eta> │ today $<x> · pace → ~$<y> by 24:00 │ context [<bar>] <cur>% │ <verdict>
 //
 // status display for the most recent Codex session observed in cwd,
 // reading ONLY already-persisted telemetry (no stdin — tmux cannot provide
@@ -329,7 +331,9 @@ func HandleCodexStatus(ctx context.Context, deps HookDeps, cwd string) (string, 
 		Model:                    snap.Model,
 		Card:                     card,
 		ContextUsedPercent:       snap.ContextUsedPercent,
-		WeeklyLimitUsedPercent:   snap.WeeklyUsedPercent,
+		QuotaWindows:             snap.QuotaWindows,
+		Spend:                    deps.spendPaceStatus(ctx, codextelemetry.Provider),
+		Now:                      deps.renderNow(),
 		RunwayTimeToLimitSeconds: runwayETA,
 	}), nil
 }

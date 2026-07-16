@@ -16,8 +16,11 @@ package orchestrator
 import (
 	"context"
 	"encoding/json"
+	"sort"
+	"time"
 
 	"github.com/huaiche94/auspex/internal/domain"
+	"github.com/huaiche94/auspex/internal/evaluation"
 	"github.com/huaiche94/auspex/internal/storage/sqlite"
 	codextelemetry "github.com/huaiche94/auspex/internal/telemetry/codex"
 	v1 "github.com/huaiche94/auspex/pkg/protocol/v1"
@@ -68,7 +71,7 @@ func (s *CodexStatusStore) LatestCodexStatus(ctx context.Context, cwd string) (C
 		Model:     model,
 	}
 	snap.ContextUsedPercent = s.latestContextPercent(ctx, sessionID)
-	snap.WeeklyUsedPercent = s.latestWeeklyPercent(ctx, sessionID)
+	snap.QuotaWindows = s.latestQuotaWindows(ctx, sessionID)
 	return snap, true
 }
 
@@ -90,25 +93,44 @@ func (s *CodexStatusStore) latestContextPercent(ctx context.Context, sessionID s
 	return &pct
 }
 
-// latestWeeklyPercent reads the newest provider.quota.observed used_percent
-// for the secondary (weekly) window. The limit filter runs Go-side over the
-// last few quota rows rather than via a JSON SQL expression, keeping the
-// query portable across SQLite builds.
-func (s *CodexStatusStore) latestWeeklyPercent(ctx context.Context, sessionID string) *float64 {
-	payloads, ok := s.latestPayload(ctx, sessionID, v1.EventProviderQuotaObserved, 8)
+// latestQuotaWindows reads the newest provider.quota.observed measurement
+// per limit window (primary/secondary today; the set stays open — any
+// limit_id that arrives is surfaced). The per-window grouping runs
+// Go-side over the last few quota rows rather than via a JSON SQL
+// expression, keeping the query portable across SQLite builds. Rows come
+// back newest-first, so the FIRST payload seen per limit_id is that
+// window's latest sample. Windows are returned sorted by LimitID for a
+// deterministic render; nil when nothing was observed (unknown is not
+// zero).
+func (s *CodexStatusStore) latestQuotaWindows(ctx context.Context, sessionID string) []evaluation.QuotaWindowStatus {
+	payloads, ok := s.latestPayload(ctx, sessionID, v1.EventProviderQuotaObserved, 16)
 	if !ok {
 		return nil
 	}
+	var out []evaluation.QuotaWindowStatus
+	seen := map[string]bool{}
 	for _, p := range payloads {
-		if id, _ := p["limit_id"].(string); id != "secondary" {
+		id, _ := p["limit_id"].(string)
+		if id == "" || seen[id] {
 			continue
 		}
+		seen[id] = true
+		w := evaluation.QuotaWindowStatus{LimitID: id}
 		if pct, okPct := payloadNumber(p, "used_percent"); okPct {
-			return &pct
+			w.UsedPercent = &pct
 		}
-		return nil
+		if raw, okRaw := p["resets_at"].(string); okRaw && raw != "" {
+			if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+				w.ResetsAt = &t
+			}
+		}
+		if w.UsedPercent == nil && w.ResetsAt == nil {
+			continue // a window that measured nothing observes nothing.
+		}
+		out = append(out, w)
 	}
-	return nil
+	sort.Slice(out, func(i, j int) bool { return out[i].LimitID < out[j].LimitID })
+	return out
 }
 
 // latestPayload returns up to limit decoded payloads of the session's
