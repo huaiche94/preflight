@@ -235,6 +235,11 @@ func HandleCodexStop(ctx context.Context, deps HookDeps, stdin []byte) (CodexSto
 	events := deps.codexNormalizer().NormalizeStop(parsed, observedAt, snap)
 	deps.stampOpenTurn(ctx, parsed.SessionID, events)
 	persisted := deps.persist(ctx, events)
+	// M10: recompute the runway forecast from this turn's just-committed
+	// quota telemetry (runwaydrive.go) — the same driver the Claude Stop
+	// path uses, over the same runway_forecasts table (session id keys the
+	// row, provider is irrelevant to the forecast). Fail-open, record-only.
+	deps.driveRunway(ctx, parsed.SessionID)
 	return CodexStopResult{
 		EventsNormalized: len(events),
 		Persisted:        persisted,
@@ -313,10 +318,18 @@ func HandleCodexStatus(ctx context.Context, deps HookDeps, cwd string) (string, 
 			card = &c
 		}
 	}
+	// M10 runway hint (same seam as the Claude statusline emit path).
+	var runwayETA *int64
+	if deps.Runway != nil {
+		if hint, hintOK := deps.Runway.LatestRunwayHint(ctx, snap.SessionID); hintOK {
+			runwayETA = runwayStatusETA(hint)
+		}
+	}
 	return evaluation.StatusLineText(evaluation.StatusLineInput{
-		Model:                  snap.Model,
-		Card:                   card,
-		ContextUsedPercent:     snap.ContextUsedPercent,
-		WeeklyLimitUsedPercent: snap.WeeklyUsedPercent,
+		Model:                    snap.Model,
+		Card:                     card,
+		ContextUsedPercent:       snap.ContextUsedPercent,
+		WeeklyLimitUsedPercent:   snap.WeeklyUsedPercent,
+		RunwayTimeToLimitSeconds: runwayETA,
 	}), nil
 }

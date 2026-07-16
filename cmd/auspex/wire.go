@@ -243,6 +243,14 @@ func buildRootCmd(ctx context.Context) (root *cobra.Command, closeFn func() erro
 			// back out of the same DB the codex hook subtree writes into —
 			// the stdin-less render path tmux polls.
 			CodexStatus: &orchestrator.CodexStatusStore{DB: db},
+			// M10: drive the independent Runway Predictor from each Stop's
+			// per-turn quota telemetry, over the SAME db + injected clock —
+			// recomputing and persisting a runway_forecasts row so the next
+			// turn's evaluation gate (and the statusline) read a live runway
+			// signal. Native-hook mode records only; it never forces a pause
+			// (§8.8). The stateless runway.Scorer/DefaultHorizon defaults
+			// apply (nil Scorer, zero Horizon).
+			Runway: &orchestrator.RunwayForecastStore{DB: db, Clock: clk},
 			// The REAL evaluation.Service doubles as the issue-#14
 			// forecast-card source (it satisfies orchestrator.
 			// ForecastCardSource — ForecastCard/LatestForecastCard read

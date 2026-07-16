@@ -352,6 +352,17 @@ type StatusLineInput struct {
 	ContextUsedPercent *float64
 	// WeeklyLimitUsedPercent is the live seven-day quota window (#27).
 	WeeklyLimitUsedPercent *float64
+
+	// RunwayTimeToLimitSeconds is the independent Runway Predictor's
+	// uncalibrated P50 estimate of seconds until the binding quota window is
+	// exhausted at the observed burn rate (M10, read back from
+	// runway_forecasts by the hook path). nil — the common case — renders no
+	// runway segment: it is set only when a forecast exists AND projects
+	// exhaustion within the horizon, so a session with headroom stays quiet.
+	// The rendered value is always labeled with a leading "~" (an estimate,
+	// never a probability — Constitution §7); the whole line is uncalibrated
+	// by construction this wave.
+	RunwayTimeToLimitSeconds *int64
 }
 
 // StatusLineText renders the one-line statusline display (issue #14
@@ -422,10 +433,35 @@ func StatusLineText(in StatusLineInput) string {
 		}
 		parts = append(parts, seg)
 	}
+	if in.RunwayTimeToLimitSeconds != nil {
+		// Uncalibrated runway hint (M10): only present when the forecast
+		// projects exhaustion within the horizon, so this segment is itself
+		// the warning — lit yellow, with an hourglass and a "~" estimate
+		// label so it never reads as a calibrated countdown (§7).
+		parts = append(parts, ansiYellow+"⏳ runway ~"+runwayETAText(*in.RunwayTimeToLimitSeconds)+ansiReset)
+	}
 	if in.Card != nil && in.Card.PolicyAction != "" {
 		parts = append(parts, policyBadge(in.Card.PolicyAction))
 	}
 	return strings.Join(parts, ansiDim+" │ "+ansiReset)
+}
+
+// runwayETAText renders a seconds count as a compact, legible estimate —
+// "45s", "8m", or "2h" — rounding to the largest whole unit so the crowded
+// status bar shows one token, not a precise-looking timestamp the
+// uncalibrated forecast cannot justify. Negative inputs clamp to "0s".
+func runwayETAText(seconds int64) string {
+	if seconds < 0 {
+		seconds = 0
+	}
+	switch {
+	case seconds < 60:
+		return fmt.Sprintf("%ds", seconds)
+	case seconds < 3600:
+		return fmt.Sprintf("%dm", seconds/60)
+	default:
+		return fmt.Sprintf("%dh", seconds/3600)
+	}
 }
 
 // contextBar renders the segment's headline percentage — the live
