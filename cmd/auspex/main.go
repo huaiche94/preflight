@@ -12,6 +12,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -28,17 +30,34 @@ func main() {
 // defers, so it must never appear in a function that itself defers
 // cleanup.
 func run() int {
-	root, closeFn, err := buildRootCmd(context.Background())
+	// Issue #88: cancel the root context on SIGINT/SIGTERM so a `kill
+	// -TERM <auspex>` cancels every context-scoped operation — most
+	// importantly the managed runner's exec.CommandContext child, which
+	// was previously orphaned (terminal Ctrl-C signals the whole process
+	// group, so only direct signals were affected). The runner's
+	// context-cancel kill path is already tested; this wires the signal
+	// into it.
+	ctx, stop := rootContext()
+	defer stop()
+
+	root, closeFn, err := buildRootCmd(ctx)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "auspex:", err)
 		return 1
 	}
 	defer func() { _ = closeFn() }()
 
-	if err := root.Execute(); err != nil {
+	if err := root.ExecuteContext(ctx); err != nil {
 		return 1
 	}
 	return 0
+}
+
+// rootContext returns the process-lifetime context, cancelled on
+// SIGINT/SIGTERM (issue #88). Factored out of run so the signal set is
+// unit-testable — the #88 bug was precisely SIGTERM missing from it.
+func rootContext() (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 }
 
 // newRootCmd builds the root Cobra command. Kept separate from main so

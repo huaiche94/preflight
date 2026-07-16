@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/huaiche94/auspex/internal/buildinfo"
 )
@@ -38,5 +41,33 @@ func TestRootCommandHasVersionSubcommand(t *testing.T) {
 	}
 	if cmd.Name() != "version" {
 		t.Fatalf("found command %q, want %q", cmd.Name(), "version")
+	}
+}
+
+// TestRootContext_CancelledOnSIGTERM pins the issue-#88 fix: the root
+// context's signal set must include SIGTERM (not just SIGINT), so that
+// `kill -TERM <auspex>` cancels every context-scoped operation — most
+// importantly the managed runner's exec.CommandContext provider child,
+// which a missing signal handler previously orphaned. The signal is sent
+// to this test process itself; while rootContext's NotifyContext
+// subscription is live, SIGTERM is relayed to the context instead of
+// terminating the process.
+func TestRootContext_CancelledOnSIGTERM(t *testing.T) {
+	ctx, stop := rootContext()
+	defer stop()
+
+	proc, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatalf("FindProcess: %v", err)
+	}
+	if err := proc.Signal(syscall.SIGTERM); err != nil {
+		t.Fatalf("Signal(SIGTERM): %v", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		// cancelled — the #88 path works.
+	case <-time.After(5 * time.Second):
+		t.Fatal("SIGTERM did not cancel the root context (#88)")
 	}
 }
