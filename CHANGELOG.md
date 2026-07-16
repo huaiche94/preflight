@@ -55,6 +55,18 @@ follow [SemVer](https://semver.org/) once releases begin.
 
 ### Added
 
+- **VS Code companion renders FR-162 from the session-status API (#10)**:
+  the extension consumes `auspex.daemon.session_status.v1` inside its
+  existing SSE/15s-poll refresh (no second loop) and replaces the
+  placeholder sections with Risk (score + confidence + calibrated badge +
+  reason codes), Runway (ETA p50/p90 + burn rate, present-only), Quota
+  freshness (per-window used% + age, stale styling past 300s), Progress,
+  Checkpoints (state + linked repository), and Pause state (+ wake jobs,
+  FR-163 inline cancel preserved). Honesty rendering throughout: null →
+  "unknown / no data yet" (never a fabricated zero), uncalibrated
+  estimates labelled as such; 404 → "no session data yet". New vscode-free
+  `sections.ts` keeps the rendering unit-testable (54 tests green).
+
 - **Live runway forecasting in native-hook mode (#11)**: the per-turn
   quota now captured at Stop/statusline (Claude via the transcript,
   Codex via the rollout JSONL) drives the existing `runway.Scorer` — a

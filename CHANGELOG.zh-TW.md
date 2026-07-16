@@ -46,6 +46,17 @@ Auspex 所有重大變更都記錄在此檔案中。格式遵循
 
 ### Added（新增）
 
+- **VS Code companion 由 session-status API 渲染 FR-162（#10）**：
+  extension 在既有的 SSE/15 秒輪詢刷新內消費
+  `auspex.daemon.session_status.v1`（不另開輪詢），以真實區塊取代佔位 ——
+  Risk（分數 + confidence + calibrated 徽章 + reason codes）、Runway
+  （ETA p50/p90 + 燃燒率，有才顯示）、配額新鮮度（各窗 used% + age，
+  逾 300 秒給 stale 樣式）、Progress、Checkpoints（state + 連結的
+  repository）、Pause 狀態（+ wake jobs，保留 FR-163 行內取消）。全程
+  誠實渲染：null →「unknown / no data yet」（絕不捏造零值）、未校準
+  估計明確標示；404 →「no session data yet」。新的 vscode-free
+  `sections.ts` 讓渲染邏輯可單元測試（54 測試全綠）。
+
 - **native-hook 模式的即時 runway 預測（#11）**：Stop/statusline 現在
   捕捉的每回合配額（Claude 走 transcript、Codex 走 rollout JSONL）驅動
   既有的 `runway.Scorer` —— 一個與 provider 無關的 driver 讀取近期
