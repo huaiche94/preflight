@@ -216,6 +216,34 @@ func (w *Watcher) Run(ctx context.Context, onScan func(ScanStats)) error {
 	}
 }
 
+// Drain runs ScanOnce until the tree is caught up — no pass defers work
+// and the last pass read nothing new — and returns the aggregated stats
+// (FilesSeen/Deferred are the final pass's snapshot; the counters sum).
+// This is the `--once` mode's engine: a fresh process has no offsets, so
+// a single budget-bounded pass over a large backlog could exit before
+// reaching every file, and a later fresh run would start over; draining
+// inside one process lets the in-memory offsets carry progress across
+// passes. Still bounded: total work ≤ the lookback window's appended
+// bytes, each pass ≤ MaxBytesPerTick, and a pass that makes no progress
+// (everything erroring, nothing readable) ends the drain rather than
+// spinning.
+func (w *Watcher) Drain(ctx context.Context) ScanStats {
+	var total ScanStats
+	for {
+		pass := w.ScanOnce(ctx)
+		total.FilesSeen = pass.FilesSeen
+		total.Deferred = pass.Deferred
+		total.FilesRead += pass.FilesRead
+		total.BytesRead += pass.BytesRead
+		total.TurnsEmitted += pass.TurnsEmitted
+		total.EventsEmitted += pass.EventsEmitted
+		total.Errors += pass.Errors
+		if ctx.Err() != nil || pass.Deferred == 0 || pass.BytesRead == 0 {
+			return total
+		}
+	}
+}
+
 // ScanOnce performs one bounded scan pass: discover rollout files, read
 // each file's appended bytes (within the pass's byte budget), and persist
 // the events those bytes complete. It never returns an error — every
@@ -277,6 +305,9 @@ func (w *Watcher) ScanOnce(ctx context.Context) ScanStats {
 		if res.bytesRead > 0 {
 			stats.FilesRead++
 		}
+		if res.deferred {
+			stats.Deferred++
+		}
 		if scanErr != nil {
 			stats.Errors++
 			continue
@@ -322,11 +353,16 @@ func (w *Watcher) probeLeadingMeta(path string, st *fileState) {
 	}
 }
 
-// fileScanResult is scanFile's per-pass accounting.
+// fileScanResult is scanFile's per-pass accounting. deferred reports that
+// the pass's byte budget ran out with readable bytes still remaining in
+// THIS file — the caller counts it so ScanStats.Deferred honestly covers
+// partially-read files, not just files never reached (Drain's stop
+// condition depends on that honesty).
 type fileScanResult struct {
 	bytesRead int64
 	turns     int
 	events    int
+	deferred  bool
 }
 
 // scanFile parses the file's appended complete lines (up to budget bytes),
@@ -367,7 +403,12 @@ func (w *Watcher) scanFile(ctx context.Context, path string, st *fileState, budg
 
 	r := bufio.NewReaderSize(f, 64<<10)
 	var consumed int64
-	for consumed < budget {
+	exhausted := false
+	for {
+		if consumed >= budget {
+			exhausted = true
+			break
+		}
 		line, n, terminated, tooLong, rerr := readLine(r, maxLineBytes)
 		if !terminated {
 			// Torn tail write or EOF mid-line: do not consume; the next
@@ -383,6 +424,7 @@ func (w *Watcher) scanFile(ctx context.Context, path string, st *fileState, budg
 		}
 	}
 	res.bytesRead = consumed
+	res.deferred = exhausted && st.offset+consumed < info.Size()
 
 	if len(events) > 0 {
 		if err := w.deps.Persister.PersistAll(ctx, w.deps.TxRunner, events); err != nil {

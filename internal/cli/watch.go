@@ -111,7 +111,12 @@ func newWatchCodexCmd(deps rolloutwatch.Deps) *cobra.Command {
 			}
 
 			if once {
-				return emit(watcher.ScanOnce(cmd.Context()))
+				// Drain, not a single pass: a fresh process has no
+				// offsets, so one budget-bounded pass over a large
+				// backlog would exit early and the next cron run would
+				// start over, never catching up. Drain is still bounded
+				// (see rolloutwatch.Drain).
+				return emit(watcher.Drain(cmd.Context()))
 			}
 
 			ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
@@ -129,6 +134,6 @@ func newWatchCodexCmd(deps rolloutwatch.Deps) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&codexHome, "codex-home", "", "Codex home directory to watch (default: $CODEX_HOME or ~/.codex)")
 	cmd.Flags().DurationVar(&interval, "interval", rolloutwatch.DefaultInterval, "Poll interval between scan passes")
-	cmd.Flags().BoolVar(&once, "once", false, "Run a single scan pass and exit (for cron/tests)")
+	cmd.Flags().BoolVar(&once, "once", false, "Scan until caught up, then exit (for cron/tests)")
 	return cmd
 }

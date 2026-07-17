@@ -629,6 +629,37 @@ func TestScanOnce_ByteBudgetDefersWorkAcrossTicks(t *testing.T) {
 	}
 }
 
+// TestDrain_CatchesUpUnderTightBudget: Drain (the --once engine) loops
+// budget-bounded passes inside one process until nothing is deferred —
+// the cold-start/cron path where a single pass would stop short.
+func TestDrain_CatchesUpUnderTightBudget(t *testing.T) {
+	db := openTestDB(t)
+	sessions := t.TempDir()
+	stageRollout(t, sessions, cliSession, fixtureBytes(t, "cli_two_turns.jsonl"))
+	stageRollout(t, sessions, vscodeSess, fixtureBytes(t, "vscode_single_turn.jsonl"))
+
+	w, err := rolloutwatch.New(rolloutwatch.Config{
+		SessionsDir:     sessions,
+		MaxBytesPerTick: 600, // roughly one fixture line per pass
+	}, rolloutwatch.Deps{
+		Clock:     fixedClock{t: time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)},
+		IDs:       &seqIDs{prefix: "watch"},
+		Persister: claudetelemetry.NewEventStore(db),
+		TxRunner:  db,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stats := w.Drain(context.Background())
+	if stats.TurnsEmitted != 3 || stats.EventsEmitted != 12 || stats.Deferred != 0 || stats.Errors != 0 {
+		t.Fatalf("Drain stats = %+v, want all 3 turns / 12 events with nothing deferred", stats)
+	}
+	if evs := loadEvents(t, db); len(evs) != 12 {
+		t.Fatalf("stored %d events, want 12", len(evs))
+	}
+}
+
 // TestScanOnce_PrivacyGrep_NoContentReachesTheStore drives the
 // message-text fixture (user prose, assistant prose, base_instructions,
 // last_agent_message — all needle-tagged) through a full scan and greps
