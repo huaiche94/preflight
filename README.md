@@ -64,6 +64,8 @@ step:
 | **After the turn** | claims "rate limiter done" | **evidence gate**: demands test artifacts + a git snapshot; no evidence → **blocked, not marked done**, so a post-compaction regression can't ship silently |
 | **2 a.m., quota runs dry** | if it kept going the loop dies mid-task and burns the night | **Graceful Pause**: safe point → checkpoint → wake task in SQLite; when quota returns the daemon revalidates and **resumes** instead of restarting |
 
+> *Status: Graceful Pause's durable persistence, daemon loop, and revalidated resume are wired and tested; the hands-free quota trigger that fires the pause is a current vertical slice, not yet driven end-to-end (details in the Scope and capability sections below).*
+
 Side by side:
 
 | | A · harness / loop engineering | B · Auspex |
@@ -95,10 +97,14 @@ does not.
 **1. Quota is not context.** Compaction keeps a session alive past the
 context ceiling. It does nothing when the usage window runs dry at 2 a.m.
 The failure mode: the session dies, and every hour until you notice is
-wasted. Graceful Pause watches quota runway, stops at a safe point before
-the wall, checkpoints, and writes a wake task to SQLite. The daemon
-revalidates quota and repo state, then resumes — surviving crashes and
-reboots.
+wasted. Graceful Pause targets exactly this: checkpoint at a safe point,
+persist a wake task to SQLite, and let the daemon revalidate and resume,
+surviving crashes and reboots. The durable checkpoint/wake-job path, the
+unattended daemon loop, and the four-way revalidated resume are
+implemented and tested; the automatic quota-runway trigger and the
+provider turn-interrupt that fire the pause hands-free are the current
+vertical slice — built and unit-tested, not yet wired end-to-end in the
+shipped binary.
 
 **2. Compaction is lossy, and nothing audits the result.** Every
 summarization pass drops detail the earlier turns accumulated. That is
@@ -196,11 +202,14 @@ per-prompt gate, Auspex maintains:
 - **State + repository checkpoints** — every node completion writes a
   state checkpoint atomically. Repository checkpoints capture the worktree
   with secret redaction, and never commit your branch.
-- **Graceful Pause** — when the quota window is about to run out, Auspex
-  checkpoints, interrupts at a safe point, and persists a durable wake job
-  in SQLite. The daemon (`auspex daemon`) executes due wake jobs
-  unattended. Resume re-verifies repository, quota, session, and
-  authorization before running.
+- **Graceful Pause** — checkpoint at a safe point, persist a durable wake
+  job to SQLite, and let the daemon (`auspex daemon`) execute due wake jobs
+  unattended, re-verifying repository, quota, session, and authorization
+  before resuming. *Status: the durable persistence, the unattended daemon
+  loop, and the four-way resume revalidation are implemented and tested;
+  the automatic quota-runway trigger and the provider turn-interrupt that
+  fire the pause hands-free are the current vertical slice — not yet wired
+  end-to-end in the shipped binary.*
 
 ## What Auspex measures vs. what it predicts
 
