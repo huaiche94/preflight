@@ -280,8 +280,8 @@ auspex evaluate               estimate a prompt before running it (--json)
 auspex decision allow|deny    consume a one-time authorization (replays rejected)
 auspex checkpoint create      state + repository checkpoint (never commits your branch)
 auspex progress ...           inspect the Progress Tree; evidence-gated completion
-auspex pause request|cancel   safe-point pause with a durable wake job
-auspex resume                 re-verified resume
+auspex pause request|cancel   request or cancel a pause (records intent)
+auspex resume                 resume a paused run (verdict via flags)
 auspex scheduler run-once     execute due wake jobs without the daemon
 auspex daemon ...             background daemon + authenticated loopback HTTP API
 auspex run ...                one-shot prompt under the managed gate (claude|codex)
