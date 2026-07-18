@@ -46,6 +46,8 @@ flowchart TB
 | **翻頁後** | 宣稱「rate limiter 做好了」 | **evidence gate**：要測試產物 + git 快照才算數；拿不出證據 → **擋住，不標記完成**，壓縮後偷送的 regression 出不去 |
 | **凌晨 2:00 配額見底** | 若硬跑，迴圈會死在半途、白燒一整夜 | **Graceful Pause**：安全點 → checkpoint → 寫 wake task 進 SQLite；配額回來後 daemon 重驗狀態並**自動恢復**，不是從頭來 |
 
+> *狀態：Graceful Pause 的持久化（checkpoint／wake job）、daemon loop、四項重驗恢復皆已接線且有測試；自動觸發暫停的配額 trigger 仍是 vertical slice，尚未端到端接上（細節見下方 Scope 與能力段落）。*
+
 並排看：
 
 | | A · Harness ／ loop engineering | B · Auspex |
@@ -63,7 +65,7 @@ agent 已經會自己管理 context，而且機制做得不錯。Claude Code 有
 
 Auspex 不與上述任何一項競爭。它涵蓋原生壓縮做不到的三件事。
 
-**1. 配額不等於 context。** 壓縮能讓 session 撐過 context 上限。但當用量視窗（usage window）在凌晨兩點見底時，它什麼也做不了。失效模式是：session 死掉，而在你察覺之前的每一個小時都被浪費掉。Graceful Pause（優雅暫停）盯著配額剩餘跑道（quota runway），在撞牆之前找到安全點停下、建立檢查點，並把一個喚醒工作（wake task）寫進 SQLite。daemon 重新驗證配額與 repo 狀態，然後恢復執行——過程中還能挺過 crash 與重開機。
+**1. 配額不等於 context。** 壓縮能讓 session 撐過 context 上限。但當用量視窗（usage window）在凌晨兩點見底時，它什麼也做不了。失效模式是：session 死掉，而在你察覺之前的每一個小時都被浪費掉。Graceful Pause（優雅暫停）正是為此而生：在安全點建立檢查點、把一個喚醒工作（wake task）寫進 SQLite，讓 daemon 重新驗證後恢復執行——過程中還能挺過 crash 與重開機。其中持久化（checkpoint／wake job）、daemon 的無人值守 loop、與四項重驗恢復皆已接線且有測試；而**自動觸發**這一切的配額跑道 trigger 與 provider 端的 turn interrupt 仍是目前的 vertical slice——已建好並經單元測試，但尚未在出貨 binary 端到端接上。
 
 **2. 壓縮是有損的，而且沒有人稽核結果。** 每一次摘要都會丟掉先前回合累積的細節。這是壓縮的本質，不是 bug。原生機制信任它自己產生的摘要；沒有任何獨立檢查去驗證 agent 在壓縮之後是否仍走在正軌上。Auspex 不試圖把摘要做到完美。State Checkpointing（狀態存證）要求在任何工作單元被標記完成之前，先提出可驗證的證據——測試產物、checksum、Git 快照。一個在壓縮後偏離（drift）的 agent 會卡在證據閘門（evidence gate）前，而不是默默把 regression 送出去。這道閘門位於 context 視窗之外，所以它不會遺忘。
 
@@ -113,7 +115,7 @@ Auspex forecast (uncalibrated estimate — scores are not probabilities):
 
 - **Progress Tree（進度樹）**——具規範性、持久性的任務狀態（canonical, durable task state）。一個節點在沒有驗證器（validator）檢核過的證據（檔案、資料庫紀錄、checksum，或 Git 快照）之前不得標記完成；「agent 自己說完成了」永遠不算數。
 - **State（狀態）＋ repository（儲存庫）checkpoint**——每次節點完成都原子性（atomically）寫入一個 State Checkpoint；repository checkpoint 擷取 worktree 內容（並做機密資訊遮蔽／redaction），但絕不提交（commit）你的分支。
-- **Graceful Pause（優雅暫停）**——配額視窗即將用盡時，Auspex 建立檢查點、在安全點（safe point）中斷，並在 SQLite 中持久化一個到期喚醒工作（wake job）。daemon（`auspex daemon`）在無人值守（unattended）下執行到期的 wake job；恢復（resume）前重新驗證 repository、配額、session 與授權（authorization）。
+- **Graceful Pause（優雅暫停）**——在安全點（safe point）建立檢查點、於 SQLite 中持久化一個到期喚醒工作（wake job），並由 daemon（`auspex daemon`）在無人值守（unattended）下執行到期的 wake job，恢復（resume）前重新驗證 repository、配額、session 與授權（authorization）。*狀態：持久化、無人值守 daemon loop 與四項重驗恢復皆已接線且有測試；而**自動觸發**暫停的配額跑道 trigger 與 provider turn interrupt 仍是目前的 vertical slice——尚未在出貨 binary 端到端接上。*
 
 <a id="what-auspex-measures-vs-what-it-predicts"></a>
 ## Auspex 量測什麼 vs. 預測什麼
