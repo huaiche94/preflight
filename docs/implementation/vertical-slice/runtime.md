@@ -5,7 +5,7 @@
 > **Wave 11 sections appended below the Wave 10 node log** — see "Wave 11"
 > heading. Wave 11 completes `runtime-b10`, the final Part B
 > integration/reliability gate and this role's LAST assigned DAG node —
-> after this wave, every node ever assigned to `runtime` (`a01`-`a11`,
+> after this phase, every node ever assigned to `runtime` (`a01`-`a11`,
 > `b01`-`b10`, 21 nodes total) is complete. Centerpiece: a real
 > in-process-restart-same-SQLite-file proof (both a clean-shutdown restart
 > and a genuine SIGKILLed-subprocess crash restart), closing one real,
@@ -13,7 +13,7 @@
 > SQLite-backed implementation, only the in-memory `MemStore` five prior
 > Part A nodes had each separately deferred) plus one genuine Part B Tests
 > gap ("CLI golden tests," never built by any prior b01-b09 node). No new
-> ADRs, no cross-role change requests this wave.
+> ADRs, no cross-role change requests this phase.
 
 > **Wave 10 sections appended below the Wave 9 node log** — see "Wave 10"
 > heading. Wave 10 completes two nodes in sequence, each validated and
@@ -22,8 +22,8 @@
 > gap this pass found, provider-interrupt-failure state-machine
 > integration) and `runtime-b09` (uniform error contract + privacy gate
 > audit across all P0 CLI commands, closing the JSON-error-rendering gap
-> this pass found). No new ADRs, no cross-role change requests this wave.
-> `runtime-b10` (this role's final node) remains for a future wave.
+> this pass found). No new ADRs, no cross-role change requests this phase.
+> `runtime-b10` (this role's final node) remains for a future phase.
 
 > **Wave 9 sections appended below the Wave 8 node log** — see "Wave 9"
 > heading. Wave 9 completes three nodes in sequence, each validated and
@@ -31,14 +31,14 @@
 > cancel-wins-race), `runtime-a10` (provider interrupter/resumer fake
 > contract tests), `runtime-b06` (decision allow/deny wired to the REAL
 > `internal/evaluation.Service`, replacing runtime-b03's fake). No new ADRs,
-> no cross-role change requests this wave.
+> no cross-role change requests this phase.
 
 > **Wave 5 sections appended below the Wave 4 node log** — see "Wave 5"
 > heading. Wave 5 completes six nodes in one pass: the full currently-
 > unlocked frontier for this role (`runtime-a02`, `runtime-a06`,
 > `runtime-b03`, `runtime-b04`, `runtime-b05`, `runtime-b08`). No new
-> cross-role change requests this wave; Wave 4's foundation migrate_test.go
-> change request was resolved before this wave started (confirmed: `go
+> cross-role change requests this phase; Wave 4's foundation migrate_test.go
+> change request was resolved before this phase started (confirmed: `go
 > test ./internal/storage/sqlite/...` is fully green on this branch).
 
 > **Wave 4 sections appended below the Wave 3 node log** — see "Wave 4"
@@ -152,7 +152,7 @@ mechanical: rename the four `Use` strings in
 `internal/cli/hook.go`'s `newHookClaudeCmd` and update
 `root_test.go`/`errors_test.go`'s path tables to match — no other file is
 affected, since every stub command is otherwise identical regardless of
-its `Use` string. Flagging this explicitly so a future wave doesn't have
+its `Use` string. Flagging this explicitly so a future phase doesn't have
 to rediscover it: **REC-03 should still be raised as a real ADR** even
 though this node made a documented, non-blocking judgment call to proceed
 under kebab-case in the meantime.
@@ -177,7 +177,7 @@ validation:
   - "go build -o <tmp> ./cmd/auspex && <tmp> --help   # OK (existing version-only binary; unaffected by this package)"
   - "golangci-lint run ./...   # 0 issues, whole repo"
 commit: a6a3eaa
-next_action: runtime-b02 (App wiring) — blocked/not started this wave per explicit instruction to stop once runtime-b01 is Validated; Part A (internal/pause/**, internal/scheduler/**) also not started this wave, out of scope per task brief
+next_action: runtime-b02 (App wiring) — blocked/not started this phase per explicit instruction to stop once runtime-b01 is Validated; Part A (internal/pause/**, internal/scheduler/**) also not started this phase, out of scope per task brief
 assumptions:
   - "Kebab-case for `auspex hook claude ...` subcommands — see the
     dedicated section above. Documented, not silent; REC-03 remains open
@@ -185,7 +185,7 @@ assumptions:
   - "Every command below `version` is an honest stub returning
     domain.Error{Code: ErrCodeUnavailable, Retryable: true} rather than
     any real behavior, per explicit task instruction: none of
-    orchestrator/evaluation/checkpoint/pause services exist yet this wave,
+    orchestrator/evaluation/checkpoint/pause services exist yet this phase,
     and the DAG's own validation command
     (`go build ./internal/cli/... && auspex --help`) only requires
     `go build` and `--help` to work, not working commands."
@@ -194,7 +194,7 @@ assumptions:
     scheduler, status, doctor) into a single file rather than one file per
     command. The DAG estimated 6 files/350 LOC for runtime-b01; one file
     per command (13 top-level constructors) would have produced far more
-    files than that estimate for what is, this wave, structurally
+    files than that estimate for what is, this phase, structurally
     identical boilerplate per command (a Use/Short/RunE stub). `hook` was
     split out on its own because it is a three-level subtree with its own
     naming-convention discussion, which justified a dedicated file and
@@ -316,7 +316,7 @@ artifacts:
 validation:
   - "go test ./internal/storage/sqlite/... -run Migration0050   # all 6 PASS"
   - "gofmt -l internal/storage/sqlite   # empty"
-next_action: runtime-a02 (pause state machine) — NOT this wave, per explicit scope
+next_action: runtime-a02 (pause state machine) — NOT this phase, per explicit scope
 assumptions:
   - "Plain TEXT (no FK) for pause_records' four references into
     not-yet-landed migration ranges — see the deviation section above;
@@ -411,7 +411,7 @@ validation:
   - "gofmt -l internal/app/wiring internal/testutil   # empty"
   - "go vet ./internal/app/wiring/... ./internal/testutil/...   # OK"
   - "golangci-lint run ./...   # 0 issues, whole repo"
-next_action: runtime-b03+ (real handler logic) and runtime-a02 (pause state machine) — NOT this wave, per explicit scope
+next_action: runtime-b03+ (real handler logic) and runtime-a02 (pause state machine) — NOT this phase, per explicit scope
 assumptions:
   - "TxRunner and the ADR-041 predictor pipeline stages
     (ScopeEstimator/TokenForecaster/QuotaForecaster/RiskCombiner) are NOT
@@ -641,7 +641,7 @@ assumptions:
     already-resolved IDs directly; documented in doc.go."
   - "internal/gitx (checkpoint role's Git plumbing) is consumed
     directly as a public package, not faked — it is not one of the
-    frozen app ports this wave's fakes cover, and it already has its
+    frozen app ports this phase's fakes cover, and it already has its
     own real, tested implementation from checkpoint's earlier waves."
 blockers: []
 ```
@@ -697,11 +697,11 @@ assumptions:
   - "claude-provider-04's parsers/Normalizer are called directly (real,
     not faked), per the task brief's explicit instruction that they are
     already integrated."
-  - "HookDeps.Evaluation is app.EvaluationService (fake this wave, see
+  - "HookDeps.Evaluation is app.EvaluationService (fake this phase, see
     Fakes Used section below) — same dependency runtime-b03 already
     tracks, not a new gap."
   - "ADD §22.6's status-line compose-with-previous-command installer
-    mechanism is out of scope this wave — HandleStatusLine
+    mechanism is out of scope this phase — HandleStatusLine
     normalizes+persists only; no internal/statusline package exists
     yet to own the composition step."
 blockers: []
@@ -751,9 +751,9 @@ commit: aa7130e
 next_action: runtime-b08
 assumptions:
   - "Both StateCheckpoint and RepositoryCheckpoint wired against fakes
-    this wave (checkpoint-a04/b04 not integrated yet, per the task
+    this phase (checkpoint-a04/b04 not integrated yet, per the task
     brief's explicit instruction to use fakes for both regardless of
-    checkpoint-b04's in-progress sibling-branch status this wave)."
+    checkpoint-b04's in-progress sibling-branch status this phase)."
 blockers: []
 ```
 
@@ -808,7 +808,7 @@ validation:
   - "go test ./internal/cli/... -run 'Status|Doctor' -race -v   # 6/6 PASS"
   - "go test ./internal/orchestrator/... ./internal/cli/... ./internal/app/wiring/... -race   # all PASS"
 commit: deaf094
-next_action: none — all six Wave 5 nodes complete; runtime-a03/a04/a05/a07/a08/a09/a10/a11/b06/b07/b09/b10 remain, out of scope this wave
+next_action: none — all six Wave 5 nodes complete; runtime-a03/a04/a05/a07/a08/a09/a10/a11/b06/b07/b09/b10 remain, out of scope this phase
 assumptions:
   - "No fakes tracked for follow-up on this node: DBPinger/ConfigLoader
     are narrow interfaces this node owns outright, satisfied directly
@@ -820,7 +820,7 @@ blockers: []
 ## Post-node whole-repo lint sweep
 
 After all six nodes, `golangci-lint run ./...` found 11 issues, all in
-this wave's own new files (errcheck x1, errorlint x5, nilerr x3,
+this phase's own new files (errcheck x1, errorlint x5, nilerr x3,
 staticcheck x1, unused x1). Fixed all 11 in a dedicated commit
 (`90078c3`) separate from the six node commits, per the same
 never-batch-unrelated-work discipline — this commit is cleanup of
@@ -828,12 +828,12 @@ already-committed work, not a seventh node. `golangci-lint run ./...`
 now reports 0 issues, whole repo; `go test ./... -race` is fully green
 across every package, including `internal/storage/sqlite` (confirming
 Wave 4's foundation migrate_test.go change request was resolved before
-this wave began, as the task brief stated).
+this phase began, as the task brief stated).
 
-## Fakes used this wave (tracked for integration)
+## Fakes used this phase (tracked for integration)
 
 Every one of these was explicitly authorized by the task brief as a
-soft/fake-able dependency for this wave; each is called out here so a
+soft/fake-able dependency for this phase; each is called out here so a
 later integration pass can find every place that still needs a real
 implementation swapped in.
 
@@ -842,9 +842,9 @@ implementation swapped in.
 | runtime-b03 | `predictor-08`/`predictor-09` (Policy/Evaluation persistence) — `app.EvaluationService` | `internal/orchestrator/evaluate.go`'s `Deps.Evaluation`, wired to `fakes.FakeEvaluationService` in tests and (until predictor lands) in `wiring` |
 | runtime-b04 | Same `app.EvaluationService` fake (UserPromptSubmit's block/allow decision) | `internal/orchestrator/hooks.go`'s `HookDeps.Evaluation` |
 | runtime-b05 | `checkpoint-a04` (real `CompleteNode`/state-checkpoint atomic protocol) — `app.StateCheckpointService` | `internal/orchestrator/checkpoint.go`'s `Deps.StateCheckpoint` |
-| runtime-b05 | `checkpoint-b04` (repository checkpoint; being built this same wave by a sibling teammate, not yet merged) — `app.RepositoryCheckpointService` | `internal/orchestrator/checkpoint.go`'s `Deps.RepositoryCheckpoint` |
+| runtime-b05 | `checkpoint-b04` (repository checkpoint; being built this same phase by a sibling teammate, not yet merged) — `app.RepositoryCheckpointService` | `internal/orchestrator/checkpoint.go`'s `Deps.RepositoryCheckpoint` |
 
-Explicitly NOT fake this wave, per the task brief and verified directly
+Explicitly NOT fake this phase, per the task brief and verified directly
 in this artifact's node logs:
 
 - `claude-provider-04`'s hook payload parsers and Normalizer (`internal/
@@ -867,8 +867,8 @@ owns its own paths) before any Wave 6 work. Brings in Wave 5's integrated
 state, including `checkpoint`'s real `checkpoint-b04` (repository
 checkpoint) landing on `main` and `predictor`'s risk combiner
 (`internal/predictor/risk`). Per the task brief, `runtime-b05`'s existing
-internal fake for `checkpoint-b04` was deliberately left as-is this wave
-(not this wave's assignment to swap) — noted here, not silently changed.
+internal fake for `checkpoint-b04` was deliberately left as-is this phase
+(not this phase's assignment to swap) — noted here, not silently changed.
 
 Assigned nodes, all Part A, executed sequentially with independent
 validate+commit after each: `runtime-a03` (Observe debounce/hysteresis) ->
@@ -876,7 +876,7 @@ validate+commit after each: `runtime-a03` (Observe debounce/hysteresis) ->
 `runtime-a07` (restart recovery of overdue/leased jobs). `runtime-a03`/
 `runtime-a04` both build directly on `runtime-a02`'s state machine;
 `runtime-a07` builds on `runtime-a06`'s scheduler lease store. No Part B
-work this wave.
+work this phase.
 
 ## runtime-a03 — Observe debounce/hysteresis
 
@@ -966,7 +966,7 @@ blockers: []
   `internal/orchestrator.CheckpointCreate` ordering pattern (state
   before repository, early-return on the first error) one layer up, at
   the safe-point boundary instead of the checkpoint-role boundary. Only
-  fakes are used for the checkpoint side this wave, per the DAG's
+  fakes are used for the checkpoint side this phase, per the DAG's
   explicit note and consistent with `runtime-b05`'s precedent.
 - `internal/pause/requestpause_test.go` — 7 tests: first-call-creates,
   idempotent-replay-no-duplicate (many repeated calls converge on one
@@ -1071,7 +1071,7 @@ validation:
   - "go test ./internal/scheduler/... -run Restart -v   # 6/6 PASS"
   - "go test ./internal/pause/... ./internal/scheduler/... -race -v   # all PASS"
 commit: 6cce24a
-next_action: runtime-a05 (persist phase orchestration) or runtime-a08 — NOT this wave, per explicit scope (three nodes only)
+next_action: runtime-a05 (persist phase orchestration) or runtime-a08 — NOT this phase, per explicit scope (three nodes only)
 assumptions:
   - "Restart's unconditional-release semantics (ignoring
     lease_expires_at entirely) are correct ONLY at process-startup time,
@@ -1093,7 +1093,7 @@ blockers: []
 
 - All three nodes landed at or under their DAG estimates (each M/300
   points/~3-4h) with no rework and no blockers — the lowest-friction
-  wave this role has had, consistent with all three nodes building
+  phase this role has had, consistent with all three nodes building
   directly on top of already-frozen, already-tested prior work
   (`runtime-a02`'s state machine, `runtime-a06`'s lease store) rather
   than integrating a new cross-role dependency.
@@ -1110,11 +1110,11 @@ blockers: []
   the node's own doc comment so a future reader does not mistake it for
   a redundant duplicate of `ReclaimExpired`.
 - No new ADRs were required and no frozen contract needed a
-  change-request escalation this wave. `checkpoint-b04` landing for real
-  on `main` this wave did not require any change on this branch, per
+  change-request escalation this phase. `checkpoint-b04` landing for real
+  on `main` this phase did not require any change on this branch, per
   the task brief's explicit instruction to leave `runtime-b05`'s
-  existing fake as-is until a future wave's integration step.
-- Confirmed explicitly: this wave touched only `internal/pause/**` and
+  existing fake as-is until a future phase's integration step.
+- Confirmed explicitly: this phase touched only `internal/pause/**` and
   `internal/scheduler/**` (Part A's exclusive paths) — no file under
   `internal/progress/**` (a sibling teammate's concurrent Wave 6 work on
   the distinctly-different `checkpoint-a04` node) or any Part B runtime
@@ -1133,7 +1133,7 @@ real `CompleteNode`/State Checkpoint work (`internal/progress`,
 Policy layer (`internal/policy`). Per the task brief, `checkpoint-a05`
 (State Checkpoint service) and the frozen `app.StateCheckpointService`'s
 real implementation are **not** part of this merge — they are sibling
-teammates' concurrent work this same wave — so this wave still uses
+teammates' concurrent work this same phase — so this phase still uses
 `internal/testutil/fakes.FakeStateCheckpointService` for that one specific
 dependency, exactly as instructed.
 
@@ -1213,10 +1213,10 @@ next_action: runtime-b07
 assumptions:
   - "State Checkpoint step uses internal/testutil/fakes.FakeStateCheckpointService
     (checkpoint-a05's real implementation is a sibling teammate's
-    concurrent, not-yet-mergeable work this same wave, per the task
+    concurrent, not-yet-mergeable work this same phase, per the task
     brief's explicit instruction)."
   - "Progress Tree snapshot step calls the general
-    app.ProgressTreeService.Snapshot method (also faked this wave via
+    app.ProgressTreeService.Snapshot method (also faked this phase via
     fakes.FakeProgressTreeService) rather than a dedicated snapshot-only
     port — no such narrower port exists in the frozen contract, and the
     task brief authorized a fake here regardless of checkpoint-a04's real
@@ -1229,7 +1229,7 @@ assumptions:
     FindActiveByKey/Insert operate on PauseKey while persist-phase
     resumption operates on an already-known PauseID; PauseRecord itself
     is the single shared durable type both interfaces read/write."
-  - "Two backing stores for one conceptual pause record during this wave's
+  - "Two backing stores for one conceptual pause record during this phase's
     tests (in-memory PersistPauseStore + real SQL pause_records row) — see
     the dedicated design note above; tracked as a gap for a later
     integration node, not silently resolved."
@@ -1300,10 +1300,10 @@ validation:
   - "go test ./internal/app/wiring/... -race -v   # all PASS, including 4 new end-to-end CLI-tree tests"
   - "golangci-lint run ./...   # 0 issues, whole repo"
 commit: fdb5911
-next_action: none — both Wave 7 nodes complete; runtime-a08/a09/a10/a11/b06/b09/b10 remain, out of scope this wave
+next_action: none — both Wave 7 nodes complete; runtime-a08/a09/a10/a11/b06/b09/b10 remain, out of scope this phase
 assumptions:
   - "Resume's Valid/QuotaUnsafe/Conflict verdict is caller-supplied this
-    wave, not independently computed — see lifecycle.go's package comment.
+    phase, not independently computed — see lifecycle.go's package comment.
     ResumeCmdRequest defaults to Valid when neither --quota-unsafe nor
     --conflict is passed, keeping the common CLI case usable without
     requiring a08's not-yet-built checks; documented, not silent."
@@ -1316,7 +1316,7 @@ blockers: []
 
 ## Wave 7 cross-node observations
 
-- `runtime-a05` was the wave's (and, per the DAG's own risk ranking,
+- `runtime-a05` was the phase's (and, per the DAG's own risk ranking,
   the role's) highest-risk node — crash-injection testing across FIVE
   independent write boundaries, two of them real cross-role services
   (Repository Checkpoint) rather than in-process fakes, required a
@@ -1343,7 +1343,7 @@ blockers: []
   pre-existing files) is in line with that established pattern, not a new
   surprise.
 - No new ADRs, no change-request escalations, and no frozen-contract
-  questions this wave. The one explicitly-tracked gap (`PersistPauseStore`
+  questions this phase. The one explicitly-tracked gap (`PersistPauseStore`
   as an in-memory store distinct from the real `pause_records` SQL table
   `wake_jobs` already references) is flagged in `runtime-a05`'s own
   section above for a later integration node, not silently resolved or
@@ -1359,7 +1359,7 @@ real `internal/statecheckpoint.Service` (`app.StateCheckpointService`) and
 `predictor`'s real `internal/evaluation.Service`
 (`app.EvaluationService`/`ConsumeAuthorization`, `predictor-09`). Per the
 task brief, `predictor-10`'s authorization-hardening pass is a concurrent
-sibling this same wave, not yet mergeable — this wave still uses
+sibling this same phase, not yet mergeable — this phase still uses
 `internal/testutil/fakes.FakeEvaluationService` for the one
 `ConsumeAuthorization` call this node makes, consistent with the
 established fake-then-swap pattern.
@@ -1394,7 +1394,7 @@ Assigned node: `runtime-a08` (Resume validation).
     session must currently report `Resumable`, plus an optional explicit
     `domain.ProviderCapabilities.SessionResume` requirement.
   - `CheckAuthorization` (`app.EvaluationService.ConsumeAuthorization` —
-    FAKE this wave, see below): a rejected/expired/already-consumed
+    FAKE this phase, see below): a rejected/expired/already-consumed
     authorization and a genuinely-unreachable authorization service are
     both failures, but with distinct reason codes
     (`ReasonAuthorizationInvalid` vs. `ReasonAuthorizationServiceUnavailable`)
@@ -1497,11 +1497,11 @@ validation:
   - "go build ./... && go test ./... -race -count=1   # all PASS, whole repo, zero regressions"
   - "golangci-lint run ./...   # 0 issues, whole repo"
 commit: <recorded below>
-next_action: runtime-a09 (duplicate-wake + cancel) — NOT this wave, per explicit scope; a09 is where a real scheduler-claimed wake job is driven through EventWakeDue -> ValidateResume -> Resume/RescheduleWakeJobOnQuotaUnsafe end to end
+next_action: runtime-a09 (duplicate-wake + cancel) — NOT this phase, per explicit scope; a09 is where a real scheduler-claimed wake job is driven through EventWakeDue -> ValidateResume -> Resume/RescheduleWakeJobOnQuotaUnsafe end to end
 assumptions:
-  - "app.EvaluationService.ConsumeAuthorization is FAKED this wave
+  - "app.EvaluationService.ConsumeAuthorization is FAKED this phase
     (internal/testutil/fakes.FakeEvaluationService) — predictor-10's
-    authorization-hardening pass is a concurrent sibling this same wave,
+    authorization-hardening pass is a concurrent sibling this same phase,
     not yet mergeable, per the task brief's explicit instruction, consistent
     with the established fake-then-swap pattern (runtime-a05/b05 did the
     same for checkpoint-a05/b04 in earlier waves)."
@@ -1534,27 +1534,27 @@ blockers: []
 
 ## Wave 8 cross-node observations
 
-- This wave's one node closes the last explicitly-named gap in
+- This phase's one node closes the last explicitly-named gap in
   `lifecycle.go`'s `Resume` (its own package comment named runtime-a08 as
   the owner of "real resume validation," not yet built) — `Resume` itself
   was not modified; `ValidateResume`/`Verdict()` are additive, designed to
   feed `Resume`'s existing caller-supplied-verdict parameter without
   requiring any change to `lifecycle.go`'s frozen shape from prior waves.
 - Consistent with this role's established practice, the one real judgment
-  call with cross-wave consequence (the two-channel failure design: normal
+  call with cross-phase consequence (the two-channel failure design: normal
   `CheckResult` failures vs. composition-bug Go errors) is documented
   explicitly in its own section above, not left implicit — a future reader
   extending any one checker should follow the same split rather than
   reintroducing the conflated version this node's own tests caught first.
 - No new ADRs, no change-request escalations, and no frozen-contract
-  questions this wave. `app.RepositoryCheckpointService.Verify` and
+  questions this phase. `app.RepositoryCheckpointService.Verify` and
   `app.EvaluationService.ConsumeAuthorization`'s frozen signatures
   (`internal/app/ports.go`) were used exactly as declared, with no
   requested addition.
 
 ## Wave 9
 
-Three nodes this wave, each validated and committed independently per the
+Three nodes this phase, each validated and committed independently per the
 task brief's explicit instruction (never batched): `runtime-a09`,
 `runtime-a10`, `runtime-b06`. Merged `origin/main` first (fast-forward,
 clean) to bring in Wave 8's integrated state: predictor's real, hardened
@@ -1563,7 +1563,7 @@ clean) to bring in Wave 8's integrated state: predictor's real, hardened
 ### runtime-a09: duplicate wake exactly-once + cancel-wins-race
 
 **The real bug this node found and fixed.** `lifecycle.go`'s `Cancel` and
-`Resume` (runtime-b07, prior wave) were written as a single `GetByID`
+`Resume` (runtime-b07, prior phase) were written as a single `GetByID`
 followed by one or more unconditional `UpdateStatus` calls. That shape has
 a genuine time-of-check-to-time-of-use gap: two concurrent callers acting
 on the SAME `PauseID` (the split-brain scenario this node's task brief
@@ -1645,7 +1645,7 @@ validation:
   - "go test ./internal/pause/... ./internal/scheduler/... ./internal/orchestrator/... ./internal/cli/... ./internal/testutil/fakes/... -race -v   # all PASS"
   - "go build ./... && go test ./...   # all PASS, whole repo, zero regressions"
 commit: e7d37be
-next_action: runtime-a11 (Required tests — crash-after-every-phase, expired-lease-reclaim, XL) — NOT this wave
+next_action: runtime-a11 (Required tests — crash-after-every-phase, expired-lease-reclaim, XL) — NOT this phase
 assumptions:
   - "PauseStore.CompareAndSwapStatus is a NEW interface method (not a
     frozen cross-component port — PauseStore itself is this package's own
@@ -1830,7 +1830,7 @@ validation:
   - "go test ./internal/pause/... ./internal/scheduler/... ./internal/orchestrator/... ./internal/cli/... ./internal/testutil/fakes/... ./internal/app/wiring/... -race -v   # all PASS"
   - "go build ./... && go test ./...   # all PASS, whole repo, zero regressions"
 commit: e150b35
-next_action: runtime-b09 (JSON/error contract across all P0 commands) — NOT this wave
+next_action: runtime-b09 (JSON/error contract across all P0 commands) — NOT this phase
 assumptions:
   - "AuthorizationIssuer is a NEW local interface in internal/orchestrator
     (not internal/app/ports.go, which is contract-integrator-owned and not
@@ -1857,15 +1857,15 @@ blockers: []
   command (from `EXECUTION_DAG.md`) was run and confirmed green before
   moving to the next; the full owned-package test suite plus a whole-repo
   `go build`/`go test` was additionally run after every single node, not
-  just at the end of the wave.
-- `runtime-a09` is the one node this wave whose own test suite caught a
+  just at the end of the phase.
+- `runtime-a09` is the one node this phase whose own test suite caught a
   real design flaw in ITS OWN first draft (not in existing code) before
   commit — see Lessons Learned for the full account. The fix was to the
   test's assertion, not the implementation, but the exercise is exactly
   why the CAS retry-loop implementation itself was written and tested as
   rigorously as it was: a first naive implementation attempt (a plain
   `GetByID` + `UpdateStatus` sequence, i.e. what `Cancel`/`Resume` already
-  looked like before this wave) would have failed a correctly-written
+  looked like before this phase) would have failed a correctly-written
   version of the same test reliably, not flakily — this was verified
   directly (see Lessons Learned).
 - `runtime-a10` and `runtime-b06` both required a dedicated research pass
@@ -1878,7 +1878,7 @@ blockers: []
   `Decide` call. Both research passes are reflected in code comments at
   their exact point of relevance, not just in this progress artifact.
 - No new ADRs, no cross-role change-request escalations, no frozen-contract
-  questions this wave. `internal/app/ports.go`, `internal/domain/**`, and
+  questions this phase. `internal/app/ports.go`, `internal/domain/**`, and
   `internal/evaluation/**` were called, never modified, per the task's
   explicit boundary.
 
@@ -1932,7 +1932,7 @@ test:
   FURTHER down the lifecycle (through a real `ValidateResume`/`Resume`
   call) specifically to catch any interaction effect the narrower a09
   compositions could have missed — mirroring how a09 itself caught a real
-  bug in earlier-wave code last wave. Result: **no new bug found; the
+  bug in earlier-phase code last phase. Result: **no new bug found; the
   CAS-based guarantees hold under the fuller composition, confirmed
   precisely, not assumed.** See
   `TestFullLifecycle_DuplicateWakeRace_ThroughFullValidateResume`,
@@ -1992,7 +1992,7 @@ validation:
   - "golangci-lint run ./internal/pause/...   # 0 issues"
   - "go build ./... && go test ./...   # all PASS, whole repo, zero regressions"
 commit: 084d002
-next_action: runtime-b09 (error contract + privacy gate audit) — same wave, done next
+next_action: runtime-b09 (error contract + privacy gate audit) — same phase, done next
 assumptions:
   - "TurnInterrupterAdapter/InterruptAndSleep are new production code in
     internal/pause (this role's own exclusive path), not a widening of any
@@ -2102,7 +2102,7 @@ validation:
   - "golangci-lint run ./...   # 0 issues, whole repo"
   - "go build ./... && go test ./...   # all PASS, whole repo, zero regressions"
 commit: ad335b2
-next_action: runtime-b10 (this role's final node) — NOT this wave
+next_action: runtime-b10 (this role's final node) — NOT this phase
 assumptions:
   - "internal/httpapi is out of vertical-slice scope per agents/runtime.md's own
     stretch-goal framing; the DAG's validation command referencing it is
@@ -2130,18 +2130,18 @@ blockers: []
   no-op for the `internal/httpapi` half) before moving to the next; the
   full owned-package test suite plus a whole-repo `go build`/`go test`
   was additionally run after every single node, not just at the end of
-  the wave.
+  the phase.
 - Both nodes are the same SHAPE as `checkpoint-a09`/`checkpoint-b09`/
-  `predictor-11` last wave: comprehensive final-proof/audit nodes, not
+  `predictor-11` last phase: comprehensive final-proof/audit nodes, not
   new-feature nodes. Both were explicitly instructed to report precisely
   where nothing new was found rather than manufacturing busywork — this
-  wave, `runtime-a11` found exactly one genuine production-code gap
+  phase, `runtime-a11` found exactly one genuine production-code gap
   (provider-interrupt-failure state-machine wiring) out of nine required
   tests audited, and `runtime-b09` found exactly one genuine, fixable gap
   (no JSON error-rendering layer) plus two pre-existing, out-of-scope
   gaps it documented rather than silently fixed.
 - Both nodes' own test-writing caught a real bug in THIS SAME NODE'S first
-  draft, not in prior-wave code — consistent with (but distinct from)
+  draft, not in prior-phase code — consistent with (but distinct from)
   `runtime-a09`'s Wave 9 precedent of finding a bug in an EARLIER node's
   code. `runtime-a11`'s crash-sweep test and `BlockedConflict`-terminal
   assertion were both corrected against `statemachine.go`'s actual
@@ -2155,13 +2155,13 @@ blockers: []
   the first hypothesis (bug vs. test-modeling error vs. design error)
   without checking.
 - No new ADRs, no cross-role change-request escalations, no frozen-contract
-  questions this wave. `internal/app/ports.go`, `internal/domain/**`, and
+  questions this phase. `internal/app/ports.go`, `internal/domain/**`, and
   every other role's owned packages were called, never modified.
   `internal/pause/interrupt.go`'s new `TurnInterrupterAdapter` satisfies
   `pause.Interrupter` (this package's own internal seam, not a frozen
   port) exactly as `safepoint.go` already anticipated; no interface in
   `internal/app/ports.go` was widened or touched.
-- `runtime-b10` (this role's final node) remains for a future wave, per
+- `runtime-b10` (this role's final node) remains for a future phase, per
   the task's explicit instruction not to start it now.
 
 # Wave 11
@@ -2319,7 +2319,7 @@ diff, restored it) before considering this closed.
    experiment before concluding this, not assumed). A same-process
    simulation cannot faithfully reproduce a real OS-level process death
    using `database/sql`'s public API alone — a genuinely different failure
-   mode than any prior wave's node has hit. **Fix**: the standard Go
+   mode than any prior phase's node has hit. **Fix**: the standard Go
    idiom for exactly this situation — the test binary re-executes ITSELF
    as a real child OS process (`os/exec`, `os.Args[0]`,
    `-test.run=^TestZZZCrashWriterHelper$`), that child opens the same
@@ -2414,7 +2414,7 @@ assumptions:
     both the code comments and this artifact so a future reader does not
     have to rediscover why the simpler approach doesn't work."
   - "internal/httpapi, internal/daemon remain out of vertical-slice scope, unchanged
-    from every prior wave's same observation — no code added there this
+    from every prior phase's same observation — no code added there this
     node, consistent with agents/runtime.md's own stretch-goal framing."
 blockers: []
 ```
@@ -2422,11 +2422,11 @@ blockers: []
 ## Wave 11 cross-node observations — and full role retrospective
 
 Since this is `runtime`'s final vertical-slice node, this section closes out both
-the wave and the entire role arc (Bootstrap was lead-only, per
+the phase and the entire role arc (Bootstrap was lead-only, per
 `CONTRACT_FREEZE.md`; this role's own history runs Wave 3 through Wave 11,
 21 total DAG nodes: `a01`-`a11`, `b01`-`b10`).
 
-**This wave's own two findings**: consistent with every prior "final
+**This phase's own two findings**: consistent with every prior "final
 gate"-shaped node this role has shipped (`runtime-a11`, `runtime-b09` in
 Wave 10; `checkpoint-a09`/`checkpoint-b09`/`predictor-11` in the
 cross-role Wave 10 pattern already noted), a comprehensive proof node
@@ -2446,8 +2446,8 @@ nothing was left to find (something always was, because true end-to-end
 integration exercises interactions no single earlier node's narrower
 scope could exercise).
 
-**The crash-simulation lesson is this wave's one genuinely NEW technique**,
-distinct from anything a prior wave's lessons_learned already named: Wave
+**The crash-simulation lesson is this phase's one genuinely NEW technique**,
+distinct from anything a prior phase's lessons_learned already named: Wave
 5/9's "process CPU time vs wall-clock" (diagnosing a hang) and "temporary
 in-source instrumentation, confirmed then deleted" (confirming a
 hypothesis before trusting it) both apply here, but the actual FIX
@@ -2466,12 +2466,12 @@ start, not discover the same false-positive the hard way.
 
 **Full role retrospective (Wave 3 through Wave 11, 21 nodes)**:
 
-- **Sequencing discipline held for the entire arc.** Every wave that
+- **Sequencing discipline held for the entire arc.** Every phase that
   contained both Part A and Part B work sequenced Part A first
   (state-machine/concurrency-correctness risk) ahead of Part B
   (comparatively lower-risk plumbing built ON TOP of Part A), exactly as
-  Wave 5 first established and every subsequent wave (6, 7, 9, 10)
-  followed without deviation. This wave's own node (`b10`, pure Part B)
+  Wave 5 first established and every subsequent phase (6, 7, 9, 10)
+  followed without deviation. This phase's own node (`b10`, pure Part B)
   is the natural capstone of that discipline: by the time Part B needed a
   final integration gate, Part A had already had 11 of its own nodes'
   worth of scrutiny (culminating in `runtime-a11`'s own full-lifecycle
@@ -2499,11 +2499,11 @@ start, not discover the same false-positive the hard way.
   none guessed.
 - **The "comprehensive audit-then-close finds ~1 real gap" pattern**,
   first clearly named in Wave 10's cross-node observations, held a third
-  and fourth time this wave (Part A's `PauseStore` gap, Part B's golden-
+  and fourth time this phase (Part A's `PauseStore` gap, Part B's golden-
   test gap) — now confirmed across five total instances spanning two
   waves and, cross-role, at least three other roles' own equivalent final
   nodes. This is the arc's strongest piece of process evidence: Auspex's
-  per-node, per-wave documented-gap discipline (Constitution §4.4's
+  per-node, per-phase documented-gap discipline (Constitution §4.4's
   "request through the progress artifact, don't wait idle" + this role's
   own consistent practice of naming a deferred gap explicitly rather than
   silently skipping it) is what MADE this pattern possible — every gap
@@ -2521,15 +2521,15 @@ start, not discover the same false-positive the hard way.
   §§2/6/7, `CONTRACT_FREEZE.md`, the relevant ADD sections) without
   escalation, a direct, load-bearing consequence of `agents/runtime.md`
   and the frozen contract being genuinely sufficient source material for
-  an agent picking up this role fresh in any given wave, including this
+  an agent picking up this role fresh in any given phase, including this
   final one.
 - **This role's own file-count-undercounting observation (first flagged
   Wave 5, reconfirmed Waves 7/9/10)** — that any Part-B-shaped node
   spanning orchestrator-logic + CLI-command + wiring-integration runs
   roughly 2-3x the DAG's naive per-node file estimate — did NOT recur this
-  wave in the same shape, because `runtime-b10` deliberately added no new
+  phase in the same shape, because `runtime-b10` deliberately added no new
   CLI command surface (it PROVED existing ones, plus one small new
-  storage-layer file) — worth noting as the one wave where that
+  storage-layer file) — worth noting as the one phase where that
   particular estimation pattern did not apply, because the node's actual
   shape (integration-proof, not new-feature) was different in kind from
   every node the original observation was made against.
@@ -2543,7 +2543,7 @@ assigned to this role.
 
 Branch: `day1/runtime`, synced from `main` via `git fetch origin && git
 merge origin/main` (fast-forward, clean) before this work, bringing in
-Wave 12 (`qa`'s final wave, plus the `LICENSE` file). This is **not a
+Wave 12 (`qa`'s final phase, plus the `LICENSE` file). This is **not a
 numbered DAG node** — every DAG node ever assigned to this role (`a01`-
 `a11`, `b01`-`b10`) was already complete as of Wave 11's commit `ef1c43d`.
 This is a lead-identified finding from the Final integration gate review

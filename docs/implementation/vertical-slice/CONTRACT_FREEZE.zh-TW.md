@@ -223,7 +223,7 @@ strings）由 `internal/domain/status_test.go` 驗證）：
   於 `predictions`（migration `0063`：`token_input_p50/p90`、
   `token_output_p50/p90`，皆可為 NULL），讓 forecast card 得以讀回；此 slice
   不傳播到 research export（該拆分是已 export 之 total 的確定性轉換，故無
-  unlabeled-history 破口——延後到「校準後預測器獨立估計兩軸」的 wave）。完整
+  unlabeled-history 破口——延後到「校準後預測器獨立估計兩軸」的 phase）。完整
   設計見 ADR-0053。
 
 - **2026-07-14 — ADR-048（#6）：真正的儲存庫檢查點還原（repository

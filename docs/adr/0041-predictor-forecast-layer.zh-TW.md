@@ -66,7 +66,7 @@ type RiskCombiner interface {
 ### 修正後的 DAG 相依邊
 
 - 新節點 `predictor-05b`（Token Forecaster）：相依於 `predictor-05`。
-- 新節點 `predictor-05c`（Quota Forecaster）：相依於 `predictor-05b`。對 Wave 2 而言是 cold-start 安全的——在 `claude-provider-05`（持久化 telemetry persistence）與 `foundation-06`（SQLite）於後續 wave 落地、進而完成完整的經驗校準之前，採用「目前觀測值＋預設差值」的確定性推估是可接受的，這與 `predictor-04`/`predictor-08` 已建立的既有 cold-start 合約一致。
+- 新節點 `predictor-05c`（Quota Forecaster）：相依於 `predictor-05b`。對 Wave 2 而言是 cold-start 安全的——在 `claude-provider-05`（持久化 telemetry persistence）與 `foundation-06`（SQLite）於後續 phase 落地、進而完成完整的經驗校準之前，採用「目前觀測值＋預設差值」的確定性推估是可接受的，這與 `predictor-04`/`predictor-08` 已建立的既有 cold-start 合約一致。
 - `predictor-07`（Risk Combiner）：相依項由 `predictor-05, predictor-06` 修正為 `predictor-05, predictor-05c`——移除 `predictor-06`（Runway）作為相依項；它從來就不是 risk combination 的有效輸入。
 - `predictor-08`（Policy）：相依項由 `predictor-07` 修正為 `predictor-07, predictor-06`——Policy 同時直接消費綜合風險分數與獨立的 runway 命中機率（這與 `agents/predictor.md` 既有的「Initial policy suggestion」清單一致，該清單已將校準過的十分鐘命中機率列為獨立的 policy 輸入）。
 - `predictor-11`（Required tests）：相依清單擴充，納入 `predictor-05b`、`predictor-05c`。

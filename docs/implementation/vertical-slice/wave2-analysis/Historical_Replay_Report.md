@@ -74,7 +74,7 @@ number that looks like a measurement.
 ## 3. What DOES exist: internal self-consistency evidence (not accuracy)
 
 To avoid this report being purely negative, the following is real,
-Observed evidence from this wave — but it is explicitly a different and
+Observed evidence from this phase — but it is explicitly a different and
 weaker claim than "prediction accuracy," and readers should not conflate
 the two:
 
@@ -98,7 +98,7 @@ the two:
   guarantee about *what the predictor honestly says it doesn't know*, not
   a measurement of what it gets right.
 
-## 4. What would make this report producible in a future wave
+## 4. What would make this report producible in a future phase
 
 Listed here as a forward pointer only — not a recommendation to build any
 of this now, and not an implementation plan:

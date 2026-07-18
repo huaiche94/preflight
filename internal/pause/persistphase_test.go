@@ -215,7 +215,7 @@ type harness struct {
 // newHarness builds a full PersistDeps: real RepositoryCheckpointService,
 // fake StateCheckpointService and ProgressTreeService (per the task brief:
 // checkpoint-a05's real implementation is a sibling teammate's concurrent,
-// not-yet-mergeable work this same wave), real pause.MemStore, and a real
+// not-yet-mergeable work this same phase), real pause.MemStore, and a real
 // scheduler.Store against the same migrated DB.
 func newHarness(t *testing.T, clock domain.Clock) *harness {
 	t.Helper()

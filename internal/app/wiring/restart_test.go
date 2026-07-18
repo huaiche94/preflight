@@ -43,7 +43,7 @@
 // Still fake here: ProgressTreeService and GracefulPauseService. Both are
 // required non-nil fields on wiring.Services (New fails closed otherwise),
 // but NEITHER has a real, unified adapter anywhere in this repository as of
-// this wave — confirmed directly before writing this file: grepping the
+// this phase — confirmed directly before writing this file: grepping the
 // whole tree for `var _ app.ProgressTreeService =` and
 // `var _ app.GracefulPauseService =` matches only
 // internal/testutil/fakes/{progresstree,gracefulpause}.go. ProgressTree is

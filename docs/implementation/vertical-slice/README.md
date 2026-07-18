@@ -19,7 +19,7 @@ for what the product *is*.
 | [`lessons_learned/`](lessons_learned/README.md) | Per-role retrospectives written at role completion. |
 | [`wave2-analysis/`](wave2-analysis/README.md) | The mid-build analysis round that re-planned Wave 3+: calibration, feature-gap, replay, and confidence reports. |
 
-## Wave-by-wave integration history
+## Wave-by-phase integration history
 
 (Relocated from the root `README.md` when it was rewritten for
 first-time viewers — ADR-049.)
@@ -30,7 +30,7 @@ The vertical slice is 84 tasks + 1 final integration across 7 roles
 Stages and task dependencies are canonical in that DAG; **waves** are the
 integration rounds the work actually ships in. Waves 1–2 below are as
 executed. Wave 3 onward is a provisional, dependency-derived grouping —
-each wave is re-planned by the lead before it starts (see
+each phase is re-planned by the lead before it starts (see
 `wave2-analysis/` for the inputs to Wave 3
 planning) and must respect the DAG's stage and dependency order.
 
@@ -55,12 +55,12 @@ integration commit on GitHub.
 | Wave 12 | [qa-02/03/06/07/09](qa.md) | ✅ Integrated ([`a91c239`](https://github.com/huaiche94/auspex/commit/a91c239)) — completes **qa** entirely; the literal vertical-slice E2E demo runs real code end-to-end. Final report: no P0s, one open P1 (provider-event-to-node-completion wiring), fully documented |
 | Final | [contract-integrator-final](contract-integrator.md) (Stage 5) | ✅ Integrated ([`3b6cfcb`](https://github.com/huaiche94/auspex/commit/3b6cfcb) + [`faca171`](https://github.com/huaiche94/auspex/commit/faca171)) — found and closed the composition gap the gate exists to catch: `cmd/auspex/main.go` was never wired to real services. See [`contract-integrator.md`](contract-integrator.md)'s Stage 5 section |
 
-Wave 5 onward is intentionally not fixed in detail — each wave is
-re-derived from the DAG's actual dependency edges once the prior wave
+Wave 5 onward is intentionally not fixed in detail — each phase is
+re-derived from the DAG's actual dependency edges once the prior phase
 integrates (see `wave2-analysis/Wave3_Recommendation.md`
 for the method), not planned far in advance against a DAG that keeps
 changing shape as work lands.
 
-`→` marks in-wave sequencing on a role's branch; `·` separates parallel
-role branches within the same wave.
+`→` marks in-phase sequencing on a role's branch; `·` separates parallel
+role branches within the same phase.
 

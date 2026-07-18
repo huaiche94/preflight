@@ -25,7 +25,7 @@ analysis/recommendation only — none modified implementation.
 
 ## Neighbors
 
-The wave-by-wave record these reports fed back into is
+The phase-by-phase record these reports fed back into is
 [`../README.md`](../README.md); the accepted decisions they produced are
 in [`../../../adr/`](../../../adr/README.md); the deferred-with-data
 discipline they established carries on in

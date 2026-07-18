@@ -33,11 +33,11 @@ Two structural facts constrain this entire report and recur in every row:
    proxy would be a fabrication by relabeling. `actual_files_read` is
    `Unknown` for every node.
 
-Actual token usage is only `Observed` at **teammate-per-wave granularity**
+Actual token usage is only `Observed` at **teammate-per-phase granularity**
 (one number per background-agent invocation, covering every node that
 invocation completed), never at per-node granularity, because the
 sub-agents did not self-report a token breakdown per node and the harness
-does not expose one. Where a node shares a teammate-wave token total with
+does not expose one. Where a node shares a teammate-phase token total with
 sibling nodes, this is stated explicitly rather than divided evenly and
 presented as if it were per-node data.
 
@@ -107,7 +107,7 @@ presented as if it were per-node data.
 | Files changed | 5 | 6 (`git show --stat b0ef5a0`) | Observed / Observed | 1 | 20.0% |
 | Files read | Unknown | Unknown | Unknown / Unknown | — | — |
 | LOC | 350 | 1,138 insertions | Observed / Observed | 788 | 225.1% |
-| Duration | Unknown | ~45 min (self-reported; longest node this wave) | Unknown / Estimated | — | — |
+| Duration | Unknown | ~45 min (self-reported; longest node this phase) | Unknown / Estimated | — | — |
 | Token usage | Unknown | Shared Wave 2 total (see foundation-02) | Unknown / Unknown (per-node) | — | — |
 | Complexity | M | M (held; "High risk flag earned its keep," per self-assessment, independently corroborated by lead review of pragma tests) | Observed / Derived | 0 | 0% |
 

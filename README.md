@@ -437,7 +437,7 @@ authored in Traditional Chinese.
 | Understand the architecture | [`docs/design/Auspex_ADD.md`](docs/design/Auspex_ADD.md) — the single authoritative architecture/requirements spec, authored in Traditional Chinese (normative as written); amended only by ADRs under [`docs/adr/`](docs/adr/) |
 | Contribute (human or agent) | [`CONSTITUTION.md`](CONSTITUTION.md) (process authority) → [`CONTRIBUTING.md`](CONTRIBUTING.md) → [`AGENTS.md`](AGENTS.md) |
 | See how the predictor works | [`docs/design/Auspex_Predictor_Design_Supplement.md`](docs/design/Auspex_Predictor_Design_Supplement.md) + [`internal/predictor/`](internal/predictor/README.md) |
-| Trace how this repo was built | [`docs/implementation/vertical-slice/`](docs/implementation/vertical-slice/README.md) — the execution DAG, wave-by-wave integration history, per-role progress logs |
+| Trace how this repo was built | [`docs/implementation/vertical-slice/`](docs/implementation/vertical-slice/README.md) — the execution DAG, phase-by-phase integration history, per-role progress logs |
 | Reuse the multi-agent process | [`docs/methodology/`](docs/methodology/README.md) |
 | Browse all documentation | [`docs/README.md`](docs/README.md) |
 

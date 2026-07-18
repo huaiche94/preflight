@@ -116,7 +116,7 @@ or reads that field yet.
   Cold-start-safe for Wave 2 — a deterministic current-observation-plus-default-delta
   estimate is acceptable pending full empirical calibration once
   `claude-provider-05` (durable telemetry persistence) and `foundation-06`
-  (SQLite) land in a later wave, consistent with the existing cold-start
+  (SQLite) land in a later phase, consistent with the existing cold-start
   contract already established for `predictor-04`/`predictor-08`.
 - `predictor-07` (Risk Combiner): dependency corrected from
   `predictor-05, predictor-06` to `predictor-05, predictor-05c` — `predictor-06`

@@ -265,7 +265,7 @@ type StatusLineResult struct {
 // §22.6, Auspex's wrapper is expected to ultimately compose with
 // whatever status-line command was previously configured; that installer/
 // compose mechanism is a separate, not-yet-built concern (no
-// internal/statusline composition package exists this wave) — this
+// internal/statusline composition package exists this phase) — this
 // handler's job stops at normalize+persist, matching what claude-
 // provider-04 and this node's own migration/storage dependencies actually
 // support today. Callers that need the composed text output build it on

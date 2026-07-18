@@ -190,11 +190,11 @@ Source: `internal/domain/forecast.go` (`ScopeEstimate`, `TokenForecast`,
 | `ScopeEstimate.FilesReadP50/P80/P90` | Predicted files-read quantiles | `*int64` ×3 | `RuleScopeEstimator` (real, Wave 2) | Estimated | Cold-start default or session-blend, never ground-truthed | No — this is a *prediction*, not an observation | Estimated | High |
 | `ScopeEstimate.FilesChangedP50/P80/P90` | Predicted files-changed quantiles | `*int64` ×3 | same | Estimated | same | No | Estimated | Critical |
 | `ScopeEstimate.LinesChangedP50/P80/P90` | Predicted lines-changed quantiles | `*int64` ×3 | same | Estimated | same | No | Estimated | Critical |
-| `ScopeEstimate.ToolCallsP50/P90`, `VerificationP50/P90`, `RetryLoopsP50/P90`, `DurationP50/P90` | Predicted tool/verification/retry/duration | `*int64` ×8 | same | Unknown | N/A | No | Unknown (deliberately left `nil` this wave — verified by `TestEstimateScopeUnknownFieldsStayNil`) | Medium |
+| `ScopeEstimate.ToolCallsP50/P90`, `VerificationP50/P90`, `RetryLoopsP50/P90`, `DurationP50/P90` | Predicted tool/verification/retry/duration | `*int64` ×8 | same | Unknown | N/A | No | Unknown (deliberately left `nil` this phase — verified by `TestEstimateScopeUnknownFieldsStayNil`) | Medium |
 | `ScopeEstimate.RequiresUnitTests/RequiresIntegration/CrossProject/MigrationLikely/SecuritySensitive` | Predicted boolean signals | bool ×5 | same | Estimated (keyword/heuristic-derived) | 0.50-0.60 | No | Available (populated, low confidence) | High |
 | `TokenForecast.TokensP50/P80/P90` | Predicted token cost | int64 ×3 | (not built — `predictor-05b`, deferred past Wave 2) | Unknown | 0.00 | No | Unknown | Critical |
 | `QuotaForecast.ProjectedQuotaUsedP90` / `ProjectedContextUsedP90` | Projected quota/context position | `*float64` ×2 | (not built — `predictor-05c`, deferred past Wave 2) | Unknown | 0.00 | No | Unknown | Critical |
-| `RunwayForecast.RiskScore` | 10-minute quota-hazard score | float64 | `internal/predictor/runway` (real, `predictor-06`) | Estimated (uncalibrated fallback per ADD §15.7) | Always uncalibrated this wave (verified by `TestScoreNeverCalibratedNeverPanics`) | No | Available (score only, not probability) | Critical |
+| `RunwayForecast.RiskScore` | 10-minute quota-hazard score | float64 | `internal/predictor/runway` (real, `predictor-06`) | Estimated (uncalibrated fallback per ADD §15.7) | Always uncalibrated this phase (verified by `TestScoreNeverCalibratedNeverPanics`) | No | Available (score only, not probability) | Critical |
 | `RunwayForecast.HitProbability` | Calibrated 10-minute hit probability | `*float64` | same | Unknown | 0.00 (ADR-026/ADD §15.6: correctly always `nil` until calibration gate passes) | No | Unknown (by design) | Critical |
 
 ### 5b. Suitability & Operations
@@ -252,7 +252,7 @@ pattern used throughout every forecast/observation type), ADD §15.6.
 | Feature | Description | Data type / Unit | Source | Provenance | Confidence | Ground Truth | Current Availability | Importance |
 |---|---|---|---|---|---|---|---|---|
 | `Confidence` enum (`Exact`/`High`/`Medium`/`Low`/`Unavailable`) | Per-observation trust tag | enum, 5 values | `internal/domain/measurement.go` (real, Bootstrap-frozen) | Observed (the enum itself is real code); Derived (any given instance's value is a judgment call by its producer) | N/A (a confidence value is not itself confidence-scored — this is intentional, not a gap) | No | Available | Critical |
-| `Calibrated` bool (present on `TokenForecast`, `QuotaForecast`, `RiskComponent`, `RunwayForecast`) | Whether a score has passed the calibration gate | bool | same pattern, real | Observed | N/A | No | Available (always `false` in every producer this wave, correctly) | Critical |
+| `Calibrated` bool (present on `TokenForecast`, `QuotaForecast`, `RiskComponent`, `RunwayForecast`) | Whether a score has passed the calibration gate | bool | same pattern, real | Observed | N/A | No | Available (always `false` in every producer this phase, correctly) | Critical |
 | ECE (Expected Calibration Error) | Calibration quality metric | float64, 0-1 | ADD §15.6 (specified, not implemented — needs ≥20 valid samples) | Unknown | 0.00 | Yes (once computed, it is a real statistic over real outcomes) | Unknown | Critical |
 | Brier score | Calibration quality metric | float64 | same | Unknown | 0.00 | Yes (once computed) | Unknown | High |
 

@@ -171,7 +171,7 @@ validation:
   - "go build -o <tmp> ./cmd/auspex && <tmp> --help   # OK (existing version-only binary; unaffected by this package)"
   - "golangci-lint run ./...   # 0 issues, whole repo"
 commit: a6a3eaa
-next_action: runtime-b02 (App wiring) — blocked/not started this wave per explicit instruction to stop once runtime-b01 is Validated; Part A (internal/pause/**, internal/scheduler/**) also not started this wave, out of scope per task brief
+next_action: runtime-b02 (App wiring) — blocked/not started this phase per explicit instruction to stop once runtime-b01 is Validated; Part A (internal/pause/**, internal/scheduler/**) also not started this phase, out of scope per task brief
 assumptions:
   - "Kebab-case for `auspex hook claude ...` subcommands — see the
     dedicated section above. Documented, not silent; REC-03 remains open
@@ -179,7 +179,7 @@ assumptions:
   - "Every command below `version` is an honest stub returning
     domain.Error{Code: ErrCodeUnavailable, Retryable: true} rather than
     any real behavior, per explicit task instruction: none of
-    orchestrator/evaluation/checkpoint/pause services exist yet this wave,
+    orchestrator/evaluation/checkpoint/pause services exist yet this phase,
     and the DAG's own validation command
     (`go build ./internal/cli/... && auspex --help`) only requires
     `go build` and `--help` to work, not working commands."
@@ -188,7 +188,7 @@ assumptions:
     scheduler, status, doctor) into a single file rather than one file per
     command. The DAG estimated 6 files/350 LOC for runtime-b01; one file
     per command (13 top-level constructors) would have produced far more
-    files than that estimate for what is, this wave, structurally
+    files than that estimate for what is, this phase, structurally
     identical boilerplate per command (a Use/Short/RunE stub). `hook` was
     split out on its own because it is a three-level subtree with its own
     naming-convention discussion, which justified a dedicated file and
@@ -310,7 +310,7 @@ artifacts:
 validation:
   - "go test ./internal/storage/sqlite/... -run Migration0050   # all 6 PASS"
   - "gofmt -l internal/storage/sqlite   # empty"
-next_action: runtime-a02 (pause state machine) — NOT this wave, per explicit scope
+next_action: runtime-a02 (pause state machine) — NOT this phase, per explicit scope
 assumptions:
   - "Plain TEXT (no FK) for pause_records' four references into
     not-yet-landed migration ranges — see the deviation section above;
@@ -402,7 +402,7 @@ validation:
   - "gofmt -l internal/app/wiring internal/testutil   # empty"
   - "go vet ./internal/app/wiring/... ./internal/testutil/...   # OK"
   - "golangci-lint run ./...   # 0 issues, whole repo"
-next_action: runtime-b03+ (real handler logic) and runtime-a02 (pause state machine) — NOT this wave, per explicit scope
+next_action: runtime-b03+ (real handler logic) and runtime-a02 (pause state machine) — NOT this phase, per explicit scope
 assumptions:
   - "TxRunner and the ADR-041 predictor pipeline stages
     (ScopeEstimator/TokenForecaster/QuotaForecaster/RiskCombiner) are NOT
@@ -629,7 +629,7 @@ assumptions:
     already-resolved IDs directly; documented in doc.go."
   - "internal/gitx (checkpoint role's Git plumbing) is consumed
     directly as a public package, not faked — it is not one of the
-    frozen app ports this wave's fakes cover, and it already has its
+    frozen app ports this phase's fakes cover, and it already has its
     own real, tested implementation from checkpoint's earlier waves."
 blockers: []
 ```
@@ -686,11 +686,11 @@ assumptions:
   - "claude-provider-04's parsers/Normalizer are called directly (real,
     not faked), per the task brief's explicit instruction that they are
     already integrated."
-  - "HookDeps.Evaluation is app.EvaluationService (fake this wave, see
+  - "HookDeps.Evaluation is app.EvaluationService (fake this phase, see
     Fakes Used section below) — same dependency runtime-b03 already
     tracks, not a new gap."
   - "ADD §22.6's status-line compose-with-previous-command installer
-    mechanism is out of scope this wave — HandleStatusLine
+    mechanism is out of scope this phase — HandleStatusLine
     normalizes+persists only; no internal/statusline package exists
     yet to own the composition step."
 blockers: []
@@ -741,9 +741,9 @@ commit: aa7130e
 next_action: runtime-b08
 assumptions:
   - "Both StateCheckpoint and RepositoryCheckpoint wired against fakes
-    this wave (checkpoint-a04/b04 not integrated yet, per the task
+    this phase (checkpoint-a04/b04 not integrated yet, per the task
     brief's explicit instruction to use fakes for both regardless of
-    checkpoint-b04's in-progress sibling-branch status this wave)."
+    checkpoint-b04's in-progress sibling-branch status this phase)."
 blockers: []
 ```
 
@@ -800,7 +800,7 @@ validation:
   - "go test ./internal/cli/... -run 'Status|Doctor' -race -v   # 6/6 PASS"
   - "go test ./internal/orchestrator/... ./internal/cli/... ./internal/app/wiring/... -race   # all PASS"
 commit: deaf094
-next_action: none — all six Wave 5 nodes complete; runtime-a03/a04/a05/a07/a08/a09/a10/a11/b06/b07/b09/b10 remain, out of scope this wave
+next_action: none — all six Wave 5 nodes complete; runtime-a03/a04/a05/a07/a08/a09/a10/a11/b06/b07/b09/b10 remain, out of scope this phase
 assumptions:
   - "No fakes tracked for follow-up on this node: DBPinger/ConfigLoader
     are narrow interfaces this node owns outright, satisfied directly
@@ -1059,7 +1059,7 @@ validation:
   - "go test ./internal/scheduler/... -run Restart -v   # 6/6 PASS"
   - "go test ./internal/pause/... ./internal/scheduler/... -race -v   # all PASS"
 commit: 6cce24a
-next_action: runtime-a05 (persist phase orchestration) or runtime-a08 — NOT this wave, per explicit scope (three nodes only)
+next_action: runtime-a05 (persist phase orchestration) or runtime-a08 — NOT this phase, per explicit scope (three nodes only)
 assumptions:
   - "Restart's unconditional-release semantics (ignoring
     lease_expires_at entirely) are correct ONLY at process-startup time,
@@ -1198,10 +1198,10 @@ next_action: runtime-b07
 assumptions:
   - "State Checkpoint step uses internal/testutil/fakes.FakeStateCheckpointService
     (checkpoint-a05's real implementation is a sibling teammate's
-    concurrent, not-yet-mergeable work this same wave, per the task
+    concurrent, not-yet-mergeable work this same phase, per the task
     brief's explicit instruction)."
   - "Progress Tree snapshot step calls the general
-    app.ProgressTreeService.Snapshot method (also faked this wave via
+    app.ProgressTreeService.Snapshot method (also faked this phase via
     fakes.FakeProgressTreeService) rather than a dedicated snapshot-only
     port — no such narrower port exists in the frozen contract, and the
     task brief authorized a fake here regardless of checkpoint-a04's real
@@ -1214,7 +1214,7 @@ assumptions:
     FindActiveByKey/Insert operate on PauseKey while persist-phase
     resumption operates on an already-known PauseID; PauseRecord itself
     is the single shared durable type both interfaces read/write."
-  - "Two backing stores for one conceptual pause record during this wave's
+  - "Two backing stores for one conceptual pause record during this phase's
     tests (in-memory PersistPauseStore + real SQL pause_records row) — see
     the dedicated design note above; tracked as a gap for a later
     integration node, not silently resolved."
@@ -1284,10 +1284,10 @@ validation:
   - "go test ./internal/app/wiring/... -race -v   # all PASS, including 4 new end-to-end CLI-tree tests"
   - "golangci-lint run ./...   # 0 issues, whole repo"
 commit: fdb5911
-next_action: none — both Wave 7 nodes complete; runtime-a08/a09/a10/a11/b06/b09/b10 remain, out of scope this wave
+next_action: none — both Wave 7 nodes complete; runtime-a08/a09/a10/a11/b06/b09/b10 remain, out of scope this phase
 assumptions:
   - "Resume's Valid/QuotaUnsafe/Conflict verdict is caller-supplied this
-    wave, not independently computed — see lifecycle.go's package comment.
+    phase, not independently computed — see lifecycle.go's package comment.
     ResumeCmdRequest defaults to Valid when neither --quota-unsafe nor
     --conflict is passed, keeping the common CLI case usable without
     requiring a08's not-yet-built checks; documented, not silent."
@@ -1486,11 +1486,11 @@ validation:
   - "go build ./... && go test ./... -race -count=1   # all PASS, whole repo, zero regressions"
   - "golangci-lint run ./...   # 0 issues, whole repo"
 commit: <recorded below>
-next_action: runtime-a09 (duplicate-wake + cancel) — NOT this wave, per explicit scope; a09 is where a real scheduler-claimed wake job is driven through EventWakeDue -> ValidateResume -> Resume/RescheduleWakeJobOnQuotaUnsafe end to end
+next_action: runtime-a09 (duplicate-wake + cancel) — NOT this phase, per explicit scope; a09 is where a real scheduler-claimed wake job is driven through EventWakeDue -> ValidateResume -> Resume/RescheduleWakeJobOnQuotaUnsafe end to end
 assumptions:
-  - "app.EvaluationService.ConsumeAuthorization is FAKED this wave
+  - "app.EvaluationService.ConsumeAuthorization is FAKED this phase
     (internal/testutil/fakes.FakeEvaluationService) — predictor-10's
-    authorization-hardening pass is a concurrent sibling this same wave,
+    authorization-hardening pass is a concurrent sibling this same phase,
     not yet mergeable, per the task brief's explicit instruction, consistent
     with the established fake-then-swap pattern (runtime-a05/b05 did the
     same for checkpoint-a05/b04 in earlier waves)."
@@ -1637,7 +1637,7 @@ validation:
   - "go test ./internal/pause/... ./internal/scheduler/... ./internal/orchestrator/... ./internal/cli/... ./internal/testutil/fakes/... -race -v   # all PASS"
   - "go build ./... && go test ./...   # all PASS, whole repo, zero regressions"
 commit: e7d37be
-next_action: runtime-a11 (Required tests — crash-after-every-phase, expired-lease-reclaim, XL) — NOT this wave
+next_action: runtime-a11 (Required tests — crash-after-every-phase, expired-lease-reclaim, XL) — NOT this phase
 assumptions:
   - "PauseStore.CompareAndSwapStatus is a NEW interface method (not a
     frozen cross-component port — PauseStore itself is this package's own
@@ -1823,7 +1823,7 @@ validation:
   - "go test ./internal/pause/... ./internal/scheduler/... ./internal/orchestrator/... ./internal/cli/... ./internal/testutil/fakes/... ./internal/app/wiring/... -race -v   # all PASS"
   - "go build ./... && go test ./...   # all PASS, whole repo, zero regressions"
 commit: e150b35
-next_action: runtime-b09 (JSON/error contract across all P0 commands) — NOT this wave
+next_action: runtime-b09 (JSON/error contract across all P0 commands) — NOT this phase
 assumptions:
   - "AuthorizationIssuer is a NEW local interface in internal/orchestrator
     (not internal/app/ports.go, which is contract-integrator-owned and not
@@ -1983,7 +1983,7 @@ validation:
   - "golangci-lint run ./internal/pause/...   # 0 issues"
   - "go build ./... && go test ./...   # all PASS, whole repo, zero regressions"
 commit: 084d002
-next_action: runtime-b09 (error contract + privacy gate audit) — same wave, done next
+next_action: runtime-b09 (error contract + privacy gate audit) — same phase, done next
 assumptions:
   - "TurnInterrupterAdapter/InterruptAndSleep are new production code in
     internal/pause (this role's own exclusive path), not a widening of any
@@ -2096,7 +2096,7 @@ validation:
   - "golangci-lint run ./...   # 0 issues, whole repo"
   - "go build ./... && go test ./...   # all PASS, whole repo, zero regressions"
 commit: ad335b2
-next_action: runtime-b10 (this role's final node) — NOT this wave
+next_action: runtime-b10 (this role's final node) — NOT this phase
 assumptions:
   - "internal/httpapi is out of vertical-slice scope per agents/runtime.md's own
     stretch-goal framing; the DAG's validation command referencing it is
@@ -2415,7 +2415,7 @@ assumptions:
     both the code comments and this artifact so a future reader does not
     have to rediscover why the simpler approach doesn't work."
   - "internal/httpapi, internal/daemon remain out of vertical-slice scope, unchanged
-    from every prior wave's same observation — no code added there this
+    from every prior phase's same observation — no code added there this
     node, consistent with agents/runtime.md's own stretch-goal framing."
 blockers: []
 ```

@@ -1,5 +1,5 @@
 > **ARCHIVED — obsolete.** This early draft kickoff prompt specifies a
-> four-teammate, two-wave team structure that conflicts with the approved
+> four-teammate, two-phase team structure that conflicts with the approved
 > nine-agent (A00–A08) topology in `Preflight_Day1_Parallel_Execution_Plan.md`
 > and `agent-packets/`. It also predates the current directive not to spawn
 > teammates during Phase 0. Kept for historical reference only; do not

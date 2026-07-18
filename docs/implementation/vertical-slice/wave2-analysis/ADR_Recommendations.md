@@ -70,7 +70,7 @@ data exists at partial granularity, per that report).
 
 **Evidence:** `Prediction_Error_Report.md` §2 ("Nodes where
 `estimated_duration` exists at all: 0 of 19"), `Calibration_Report.md`
-§8 (names this as the #3 priority for improving future-wave confidence).
+§8 (names this as the #3 priority for improving future-phase confidence).
 
 **Affected packages:** None (this is a documentation/process artifact,
 `docs/implementation/vertical-slice/EXECUTION_DAG.md`, not Go code) — listed here
@@ -87,7 +87,7 @@ approximately, so the estimator has *something* to be checked against; or
 (b) explicitly document in the DAG's own header that duration/token are
 out of scope for this artifact by design (e.g., because they are provider-
 and model-dependent in a way LOC/files/complexity are not), which would
-at least stop the same gap being independently rediscovered every wave.
+at least stop the same gap being independently rediscovered every phase.
 Recommend (a) — a rough estimate that turns out wrong is more useful data
 than a permanently blank field, per this project's own "Unknown is a
 valid answer, but don't leave a gap uninvestigated" ethos.
@@ -147,7 +147,7 @@ which role ends up owning event storage.
 
 **Compatibility impact:** None yet (no migrations exist). Becomes a
 schema-versioning question once `foundation-06` ships migrations without
-an events table and a later wave wants to add one retroactively.
+an events table and a later phase wants to add one retroactively.
 
 **Recommendation:** Resolve before `foundation-06` is assigned, for the
 same "cheap now, expensive later" reason as ADR-REC-03. Two honest
@@ -171,7 +171,7 @@ not on a frozen multi-window type. Meanwhile `QuotaForecast` (also
 ADR-041) was deliberately kept to two scalar fields
 (`ProjectedQuotaUsedP90`, `ProjectedContextUsedP90`), not an array, per
 explicit instruction to avoid speculative multi-window complexity this
-wave.
+phase.
 
 **Evidence:** Direct code reading during Wave 2 verification
 (`internal/predictor/runway/runway.go`'s `CombineWindows`, `TestCombineWindowsTakesMax`).

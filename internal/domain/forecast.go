@@ -160,7 +160,7 @@ type TokenForecast struct {
 	// ~153:1 input:output MAGNITUDE is external SWE-bench evidence that is
 	// NEVER imported as an Auspex coefficient. Because this split is
 	// uncalibrated, Calibrated stays false whenever it is populated this
-	// wave (Constitution principle #2: score is not probability).
+	// phase (Constitution principle #2: score is not probability).
 	//
 	// Only P50/P90 per axis (no P80): the decomposition is rendered and
 	// consumed as a P50-P90 range, matching the scope and duration bands

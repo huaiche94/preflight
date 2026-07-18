@@ -137,7 +137,7 @@ checks before each integration — see the Wave 1 Integration Report and
 this conversation's Wave 2 verification steps). This is a direct,
 measurable consequence of the Constitution's exclusive-path-ownership
 rule being followed by every teammate in both waves — zero instances of
-two teammates touching the same file were found in either wave.
+two teammates touching the same file were found in either phase.
 
 ## 6. Ownership issues
 

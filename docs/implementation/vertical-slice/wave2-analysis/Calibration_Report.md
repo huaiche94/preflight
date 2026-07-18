@@ -104,14 +104,14 @@ self-assessed as lower than the DAG predicted:
   entry gives a specific, falsifiable explanation: ADD §15.4-15.7
   structures the runway forecaster as two tiers of very different size
   (an uncalibrated threshold fallback vs. a full empirical bootstrap with
-  EWMA and 1000 Monte Carlo draws), and this wave correctly built only
+  EWMA and 1000 Monte Carlo draws), and this phase correctly built only
   the smaller tier. The DAG's "L" label describes the tier that was *not*
-  built this wave.
+  built this phase.
 
 **Interpretation**: this is not evidence that Auspex's estimator is
 biased toward over-estimating complexity in general — it is evidence that
 at least one DAG node (`predictor-06`) bundled two very differently-sized
-pieces of work under one complexity label, and the wave correctly executed
+pieces of work under one complexity label, and the phase correctly executed
 only the smaller piece. This is a scope-definition issue, structurally
 similar to `foundation-04`'s stale-estimate problem in
 Prediction_Error_Report.md, not a calibration bias in the ordinary sense.
@@ -180,6 +180,6 @@ and `Wave3_Recommendation.md` for those):
    either disappear or become meaningful, rather than measuring a
    category mismatch.
 3. Capture real wall-clock timestamps (tool-call level, not self-reported)
-   for at least one future wave, since 10 of 19 nodes in this sample have
+   for at least one future phase, since 10 of 19 nodes in this sample have
    no duration data at all and the 9 that do are self-reported estimates
    from a model with no clock access.

@@ -62,8 +62,8 @@ independently re-ran the full suite before merging.
 ### 2. Cross-role contradiction review — the review's central finding
 
 Every individual role's work was independently verified as it landed
-(waves 1-12), and every wave's whole-repo `go test ./... -race` passed.
-But **passing per-wave composition tests is not the same as the actual
+(waves 1-12), and every phase's whole-repo `go test ./... -race` passed.
+But **passing per-phase composition tests is not the same as the actual
 binary being wired to real services** — this stage's own risk note
 ("six roles each correctly individually does not mean the composition is
 correct") predicted exactly the class of gap that turned out to be real:
@@ -79,7 +79,7 @@ individual piece (state machines, atomicity, idempotency, crash recovery,
 security controls) was real and deeply tested; the final assembly step —
 composing those pieces into the exact frozen interface shape, then wiring
 `cmd/auspex/main.go` to construct and use them — was never a DAG-
-numbered task and had fallen through the cracks of the wave-by-wave
+numbered task and had fallen through the cracks of the phase-by-phase
 process.
 
 Closed via three corrective additions (routed to the owning role in each
@@ -149,7 +149,7 @@ amendments exist; the frozen contract layer held for the entire build.
   qa-04/qa-09): no production adapter connects a persisted claude-provider
   event to Progress Tree node completion — a genuinely separate gap from
   this stage's own finding (a *new* adapter that doesn't exist yet, not an
-  *unassembled* existing one), correctly left open for a future wave.
+  *unassembled* existing one), correctly left open for a future phase.
 - 14 further backlog issues (#3-#16) covering security follow-ups,
   ADR-needed recommendations, and post-slice roadmap milestones (M6-M13) —
   all explicitly out of this vertical slice's scope, filed for future
