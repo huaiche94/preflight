@@ -61,6 +61,29 @@ follow [SemVer](https://semver.org/) once releases begin.
 
 ### Added
 
+- **Graceful Pause auto-trigger wired into managed runs (#122, M10)**:
+  `auspex run` now observes the session's quota runway on ADD §20.3's
+  5-second heartbeat while the provider runs
+  (`internal/managed/pausedrive.go`), feeds each forecast into
+  `internal/pause`'s existing debounce/hysteresis trigger (ADD
+  §17.6/§20.2 — previously fully tested with zero callers), and on
+  trigger drives the existing pause lifecycle end to end: request → safe
+  point → Progress-Tree/state/repository checkpoints → provider
+  interrupt (graceful SIGINT, kill escalation after a grace period —
+  M9's signal path, now a real `TurnInterrupter` replacing the
+  composition root's fail-closed stub) → `sleeping` with a durable wake
+  job. Managed mode only: native-hook mode stays observe-only (a hook
+  cannot interrupt the provider's turn,
+  `internal/orchestrator/runwaydrive.go`). **Calibration gate**: no
+  forecast is calibrated pre-M13, so the calibrated 0.80 path cannot
+  fire in production yet — only ADD §17.6's `emergency_uncalibrated`
+  trigger can; the calibrated path activates automatically once
+  calibrated forecasts exist. A trigger failure is logged and the run
+  continues (fail toward continuing work, never toward killing the
+  session). ADD M10 acceptance rows proven end to end with a fake
+  provider: `P_hit >= .80 twice -> pause requested`, `spike only -> no
+  pause`, `safe point -> checkpoints -> interrupt -> sleeping`.
+
 - **`auspex report` actionable takeaways (#100)**: the report no longer
   stops at "what happened" — it now closes with an **Actionable
   takeaways** section that turns each of five weekly-reflection cases into

@@ -1,7 +1,8 @@
 // Package managed implements the managed one-shot runner behind `auspex
 // run` (ADD §8.1; GitHub issue #8, increment 1 — the MVP; extended to
-// codex by issue #9 M7 Phase 1, ADD §21.8). It owns three concerns and
-// deliberately nothing else:
+// codex by issue #9 M7 Phase 1, ADD §21.8; extended by issue #122 with the
+// M10 Graceful Pause auto-trigger, pausedrive.go). It owns three concerns
+// plus that one optional trigger, and deliberately nothing else:
 //
 //  1. the pre-prompt gate: the same production evaluate/decide path the
 //     UserPromptSubmit hook runs (internal/orchestrator's
@@ -29,10 +30,13 @@
 //
 //   - `auspex shell` (ADD §8.2 managed shell mode) — no prompt loop exists;
 //     the CLI has no shell command yet and this increment adds none.
-//   - Turn interrupt / safe-point pause (ADD §8.1 "safe-point pause",
-//     §19-§20, §21.8 "Managed pause in exec mode") — the spawned process
-//     runs to completion; context cancellation kills it, nothing
-//     gracefully interrupts it.
+//   - Codex-specific graceful interrupt (`turn/interrupt` over the app
+//     server, ADD §21.2/§21.8 "Managed pause in exec mode") — issue #9
+//     Phase 2. The M10 auto-pause trigger (issue #122, pausedrive.go) DOES
+//     interrupt a running provider, via the process-level signal path
+//     (SIGINT, kill escalation) that both providers' one-shot subprocesses
+//     share; a protocol-level Codex interrupt is a later refinement of
+//     that same seam, not a missing branch here.
 //   - Daemon/event-stream integration — the runner is a plain in-process
 //     CLI flow with no daemon dependency; the codex app-server persistent
 //     subscription (ADD §21.2) is a different milestone.
@@ -40,8 +44,10 @@
 //     `codex exec resume`) — a run is one shot; the provider session/
 //     thread ID the stream reports is captured as attribution data only,
 //     never driven.
-//   - Continuous runway forecasting during the run (ADD §8.1) — the stream
-//     is parsed for the terminal result only; per-message live usage
+//   - Per-message live usage modeling from the stream itself (ADD §8.1) —
+//     the stream is parsed for the terminal result only; per-message usage
 //     (claude) and item.* progress (codex) are skipped-but-counted, not
-//     modeled.
+//     modeled. The #122 auto-pause trigger observes the session's
+//     PERSISTED quota telemetry (the same events table the hooks/watcher
+//     fill), not the live stream.
 package managed

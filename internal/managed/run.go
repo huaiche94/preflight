@@ -44,6 +44,14 @@ type Runner struct {
 	// provider binary — never a shell string, always an exec argv
 	// (Constitution §7 rule 5).
 	ProviderBin string
+
+	// Pause optionally arms the M10 Graceful Pause auto-trigger for this
+	// runner's managed runs (issue #122; pausedrive.go — managed mode
+	// ONLY: native-hook mode stays observe-only per
+	// internal/orchestrator/runwaydrive.go:25-28, a hook cannot interrupt
+	// the provider's turn). nil disables auto-pause entirely; Run then
+	// behaves exactly as before.
+	Pause *PauseTrigger
 }
 
 // RunRequest is one managed one-shot run. Prompt is passed to the
@@ -262,6 +270,15 @@ func (r *Runner) Run(ctx context.Context, req RunRequest) (RunOutcome, error) {
 		}
 	}
 
+	// M10 auto-pause (issue #122, pausedrive.go): while the provider runs,
+	// observe the session's quota runway and drive the graceful-pause
+	// lifecycle on trigger. nil-safe — an unarmed Runner is unchanged.
+	// providerExited is closed right after Wait below so the trigger's
+	// interrupt step can confirm the provider actually stopped (ADD §20.6
+	// Phase 4's "wait provider confirms stopped").
+	providerExited := make(chan struct{})
+	autoPause := r.Pause.beginRun(ctx, req.SessionID, cmd.Process, providerExited, humanLog)
+
 	spec.consume(stdout, relay, &outcome)
 
 	exitCode := 0
@@ -277,6 +294,12 @@ func (r *Runner) Run(ctx context.Context, req RunRequest) (RunOutcome, error) {
 			// turn.failed payload. Normalise both to the honest "-1, no
 			// exit code observed" so the contract holds on every OS.
 			exitCode = -1
+		case autoPause.Interrupted():
+			// The auto-pause trigger stopped the provider (graceful SIGINT,
+			// or the escalated kill — pausedrive.go): the resulting code is
+			// ours, not the provider's, so the same honest "-1, no exit
+			// code observed" normalization as the context-kill case above.
+			exitCode = -1
 		case errors.As(waitErr, &exitErr):
 			exitCode = exitErr.ExitCode()
 		default:
@@ -286,6 +309,13 @@ func (r *Runner) Run(ctx context.Context, req RunRequest) (RunOutcome, error) {
 			exitCode = -1
 		}
 	}
+	// The provider has been waited to completion: let a mid-interrupt
+	// trigger observe the confirmed stop, then join the driver before the
+	// terminal events persist (a fired lifecycle is bounded by
+	// PauseTrigger.LifecycleTimeout, so this join cannot hang forever).
+	close(providerExited)
+	autoPause.Stop()
+
 	outcome.ExitCode = exitCode
 	outcome.EventsPersisted += r.persistTerminal(ctx, spec, req, gate.TurnID, exitCode, outcome, false)
 	return outcome, nil

@@ -34,6 +34,7 @@ import (
 	"github.com/huaiche94/auspex/internal/gitx"
 	"github.com/huaiche94/auspex/internal/httpapi"
 	"github.com/huaiche94/auspex/internal/idgen"
+	"github.com/huaiche94/auspex/internal/managed"
 	"github.com/huaiche94/auspex/internal/orchestrator"
 	"github.com/huaiche94/auspex/internal/pace"
 	"github.com/huaiche94/auspex/internal/paths"
@@ -173,6 +174,17 @@ func buildRootCmd(ctx context.Context) (root *cobra.Command, closeFn func() erro
 	// --- runtime Part A: Graceful Pause / Scheduler -------------------
 	pauseStore := pause.NewSQLiteStore(db)
 	wakeJobStore := scheduler.NewStore(db.Conn(), clk, ids)
+	// M10 auto-pause (issue #122): the live-run registry is the managed
+	// runner's real provider-interrupt capability (M9's signal
+	// interruption — SIGINT, kill escalation after a grace period). It
+	// supersedes the former stubTurnInterrupter with the SAME fail-closed
+	// posture for every caller that has no live managed run registered
+	// (a typed capability-unavailable error, never a fabricated success),
+	// and a real signal delivery when `auspex run` owns the provider
+	// process. Managed mode only: native-hook mode stays observe-only
+	// (internal/orchestrator/runwaydrive.go:25-28 — a hook cannot
+	// interrupt the provider's turn).
+	runInterrupter := managed.NewLiveRunInterrupter()
 	gracefulPauseService := pause.NewService(pause.ServiceDeps{
 		Store:                pauseStore,
 		Clock:                clk,
@@ -182,21 +194,24 @@ func buildRootCmd(ctx context.Context) (root *cobra.Command, closeFn func() erro
 		StateCheckpoint:      stateCheckpointService,
 		RepositoryCheckpoint: repositoryCheckpointService,
 		WakeJobs:             wakeJobStore,
-		// Interrupter/Session: managed provider interrupt and resume are
-		// explicit stretch goals never built in this vertical slice (see
-		// adapters.go's stubTurnInterrupter/sessionCapabilityReaderStub
-		// doc comments) — both fail closed rather than fabricating a
-		// capability that does not exist yet.
-		Interrupter: stubTurnInterrupter{},
+		// Interrupter: the #122 live-run registry above — a real signal
+		// interrupt while `auspex run` owns the provider process, the same
+		// fail-closed "capability unavailable" error otherwise. Session
+		// (resume capability) remains the honest fail-closed stub: managed
+		// session RESUME is still unbuilt (see adapters.go's
+		// sessionCapabilityReaderStub doc comment).
+		Interrupter: runInterrupter,
 		Locate: func(pauseID domain.PauseID) app.RunLocator {
-			// No real run-locator registry exists yet (it would need to
-			// track which live SessionID/TurnID a PauseID's interrupt
-			// call should target, itself only meaningful once a real
-			// TurnInterrupter exists) -- this returns a zero-value
-			// locator, which stubTurnInterrupter's own fail-closed
-			// Interrupt call reports as an unavailable capability
-			// regardless of its contents.
-			return app.RunLocator{}
+			// Resolve the pause back to its session so the live-run
+			// registry can find the run to interrupt. Read-only against
+			// this composition's own pause store; any failure returns the
+			// zero locator, which the registry reports as an unavailable
+			// capability (fail closed, never a fabricated target).
+			rec, found, err := pauseStore.GetByID(ctx, pauseID)
+			if err != nil || !found {
+				return app.RunLocator{}
+			}
+			return app.RunLocator{SessionID: rec.Key.SessionID}
 		},
 		Quota:           quotaSnapshotReaderAdapter{source: dataSource},
 		RepoFingerprint: repoFingerprintReaderAdapter{db: db, git: gitClient},
@@ -344,6 +359,28 @@ func buildRootCmd(ctx context.Context) (root *cobra.Command, closeFn func() erro
 			IDs:       ids,
 			Persister: claudetelemetry.NewEventStore(db),
 			TxRunner:  db,
+		},
+		// M10 auto-pause trigger for `auspex run` (issue #122): forecast
+		// samples come from the frozen GracefulPause.Observe over the
+		// session's persisted quota telemetry (the SAME dataSource), the
+		// trigger thresholds are ADD §17.6/§20.2's defaults, and the
+		// interrupt resolves through runInterrupter — the same instance
+		// wired as the pause service's Interrupter above. Calibration
+		// gate: runway forecasts are uncalibrated this phase
+		// (runway.Scorer never sets Calibrated — M13's data wall), so
+		// pause.Observer's calibrated 0.80 path cannot fire in production
+		// today; only the ADD §17.6 emergency trigger
+		// (emergency_uncalibrated) can. The calibrated path activates by
+		// itself once calibrated forecasts exist — no change needed here.
+		//
+		// FLAG (composition-root reconciliation, #122): appended field only
+		// — reuses already-constructed instances; merges cleanly with any
+		// other agent's additive edit to this literal.
+		ManagedPause: &managed.PauseTrigger{
+			Service: gracefulPauseService,
+			Runs:    runInterrupter,
+			Source:  &managed.GracefulPauseObservationSource{Service: gracefulPauseService, Quota: dataSource},
+			Clock:   clk,
 		},
 	}
 

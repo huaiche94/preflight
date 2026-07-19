@@ -44,6 +44,18 @@ import (
 // `evaluate`/`hook`/`progress` follow. Exported for the same reason as
 // NewEvaluateCmd: internal/app/wiring is a different package.
 func NewRunCmd(deps orchestrator.HookDeps) *cobra.Command {
+	return NewRunCmdWithAutoPause(deps, nil)
+}
+
+// NewRunCmdWithAutoPause builds `auspex run` with the M10 Graceful Pause
+// auto-trigger armed (issue #122): while the provider runs, the trigger
+// observes the session's quota runway and drives the pause lifecycle
+// (request -> safe point -> checkpoints -> interrupt -> sleeping) via the
+// wired app.GracefulPauseService — see internal/managed/pausedrive.go for
+// the full contract, including why this exists for managed mode ONLY
+// (native-hook mode is observe-only, orchestrator/runwaydrive.go:25-28). A
+// nil trigger is exactly NewRunCmd.
+func NewRunCmdWithAutoPause(deps orchestrator.HookDeps, pauseTrigger *managed.PauseTrigger) *cobra.Command {
 	var provider, sessionID, worktreeID, taskID, providerBin string
 	cmd := &cobra.Command{
 		Use:   "run [flags] -- <prompt>",
@@ -72,7 +84,7 @@ func NewRunCmd(deps orchestrator.HookDeps) *cobra.Command {
 				tid = &t
 			}
 
-			runner := &managed.Runner{Hooks: deps, ProviderBin: providerBin}
+			runner := &managed.Runner{Hooks: deps, ProviderBin: providerBin, Pause: pauseTrigger}
 			outcome, err := runner.Run(cmd.Context(), managed.RunRequest{
 				Provider:   provider,
 				SessionID:  domain.SessionID(sessionID),

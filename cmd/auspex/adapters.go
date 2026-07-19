@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/huaiche94/auspex/internal/app"
 	"github.com/huaiche94/auspex/internal/domain"
 	"github.com/huaiche94/auspex/internal/evaluation"
 	"github.com/huaiche94/auspex/internal/features"
@@ -276,23 +275,10 @@ func (sessionCapabilityReaderStub) ReadSessionCapability(_ context.Context, _ do
 	return pause.SessionCapabilitySnapshot{Resumable: false}, nil
 }
 
-// stubTurnInterrupter satisfies app.TurnInterrupter. Like
-// sessionCapabilityReaderStub above, this stands in for a real managed
-// provider-interrupt mechanism that is explicitly out of this vertical
-// slice's scope (the same claude-provider/runtime stretch-goal notes
-// apply). It fails closed (returns an error) rather than pretending to
-// have interrupted a real running provider process, so
-// GracefulPauseService.ReachSafePoint's own machinery correctly reports
-// "interrupt failed, leave the pause record recoverable" (runtime-a11's
-// own required test for exactly this scenario) instead of silently
-// succeeding at nothing.
-type stubTurnInterrupter struct{}
-
-func (stubTurnInterrupter) Interrupt(_ context.Context, locator app.RunLocator) error {
-	return &domain.Error{
-		Code:      domain.ErrCodeUnavailable,
-		Message:   "cmd/auspex: managed provider interrupt is not implemented in this vertical slice (stretch goal, see claude-provider/runtime role docs)",
-		Retryable: false,
-		Details:   map[string]string{"session_id": string(locator.SessionID), "turn_id": string(locator.TurnID)},
-	}
-}
+// stubTurnInterrupter (a fail-closed app.TurnInterrupter stand-in) used to
+// live here; issue #122 replaced it with internal/managed's
+// LiveRunInterrupter — a registry that delivers a REAL signal interrupt
+// while `auspex run` owns the provider process, and keeps the stub's exact
+// fail-closed "capability unavailable" posture for every other caller (an
+// interrupt against no live managed run must never silently succeed). See
+// wire.go's runInterrupter and internal/managed/pausedrive.go.
