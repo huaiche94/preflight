@@ -34,6 +34,7 @@ import (
 	"github.com/huaiche94/auspex/internal/clock"
 	"github.com/huaiche94/auspex/internal/domain"
 	"github.com/huaiche94/auspex/internal/idgen"
+	"github.com/huaiche94/auspex/internal/managed"
 	"github.com/huaiche94/auspex/internal/orchestrator"
 	"github.com/huaiche94/auspex/internal/report"
 	"github.com/huaiche94/auspex/internal/rolloutwatch"
@@ -134,6 +135,19 @@ type Services struct {
 	// FLAG (composition-root reconciliation, #92): appended field —
 	// additive only, no existing field moved or retyped.
 	Watch *rolloutwatch.Deps
+
+	// ManagedPause configures the M10 Graceful Pause auto-trigger for
+	// `auspex run` (issue #122; internal/managed/pausedrive.go). Not
+	// required: nil leaves the run command exactly as before — the managed
+	// gate/spawn/attribution flow with no auto-pause, the right degrade
+	// for callers that have not wired the real pause service's interrupt
+	// registry (most tests, minimal compositions). Managed mode only:
+	// native-hook mode stays observe-only per
+	// internal/orchestrator/runwaydrive.go:25-28.
+	//
+	// FLAG (composition-root reconciliation, #122): appended field —
+	// additive only, no existing field moved or retyped.
+	ManagedPause *managed.PauseTrigger
 }
 
 // HookSupport bundles the optional collaborators
@@ -467,8 +481,11 @@ func (a *App) RootCmd() *cobra.Command {
 	// degrade per HookDeps' own documented contracts (no telemetry
 	// persisted, no lazy session registration, no forecast card) — the
 	// run itself still gates and executes.
+	// #122: the optional ManagedPause trigger rides along (nil is exactly
+	// the pre-#122 command — cli.NewRunCmdWithAutoPause(deps, nil) ==
+	// cli.NewRunCmd(deps)).
 	replaceSubcommand(root, "run", func(_ string) *cobra.Command {
-		return cli.NewRunCmd(hookDeps)
+		return cli.NewRunCmdWithAutoPause(hookDeps, a.services.ManagedPause)
 	})
 
 	checkpointDeps := orchestrator.CheckpointCreateDeps{

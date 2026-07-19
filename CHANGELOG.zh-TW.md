@@ -51,6 +51,26 @@ Auspex 所有重大變更都記錄在此檔案中。格式遵循
 
 ### Added（新增）
 
+- **Graceful Pause 自動觸發器接入 managed run（#122，M10）**：
+  `auspex run` 現在會在 provider 執行期間，依 ADD §20.3 的 5 秒心跳
+  觀測該 session 的 quota runway（`internal/managed/pausedrive.go`），
+  把每個 forecast 餵入 `internal/pause` 既有的 debounce/hysteresis
+  觸發器（ADD §17.6/§20.2——先前已完整測試但沒有任何呼叫者），並在
+  觸發時端到端驅動既有的暫停生命週期：request → safe point →
+  Progress-Tree／state／repository checkpoints → provider 中斷
+  （graceful SIGINT，寬限期後升級為 kill——M9 的訊號路徑，現在成為
+  真正的 `TurnInterrupter`，取代組合根原本 fail-closed 的 stub）→
+  `sleeping` 並排入可持久化的 wake job。僅限 managed 模式：
+  native-hook 模式維持只觀測不行動（hook 無法中斷 provider 的 turn，
+  `internal/orchestrator/runwaydrive.go`）。**Calibration gate**：M13
+  之前沒有任何 forecast 是 calibrated，因此校準的 0.80 路徑在
+  production 尚不可能觸發——只有 ADD §17.6 的 `emergency_uncalibrated`
+  觸發可行；一旦 calibrated forecast 存在，校準路徑會自動生效。觸發
+  失敗只會記錄並讓 run 繼續（fail toward continuing work，永不朝終止
+  session 的方向失效）。ADD M10 驗收列已以假 provider 端到端證明：
+  `P_hit >= .80 twice -> pause requested`、`spike only -> no pause`、
+  `safe point -> checkpoints -> interrupt -> sleeping`。
+
 - **`auspex report` 可行動建議（#100）**：報表不再只停在「發生了
   什麼」—— 結尾新增 **Actionable takeaways** 區塊，把五個每週自省
   案例各自轉成 _分析 → 教訓 → 具體行動_（FIRED 的案例排前面，未觸發
