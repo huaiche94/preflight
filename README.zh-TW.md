@@ -138,7 +138,15 @@ Auspex forecast (uncalibrated estimate — scores are not probabilities):
 <a id="quick-start"></a>
 ## 快速開始（Quick start）
 
-需要 Go 1.26.5（版本已固定於 `go.mod`）；不需要 CGO，也不需要任何外部服務。
+**先決條件（Prerequisites）**
+
+- **Go 1.26.5**（版本已固定於 `go.mod`）用來 build——不需要 CGO，也不需
+  要任何外部服務。
+- **你要接的程式輔助代理人**——Claude Code 和／或 Codex CLI——供下方的
+  provider hook 使用。
+- *選用，供常駐狀態列：*[**WezTerm**](https://wezterm.org)（**不經 tmux**
+  的狀態列——見 [`integrations/wezterm/`](integrations/wezterm/README.zh-TW.md)），
+  或 **tmux**。
 
 ```bash
 go build -o auspex ./cmd/auspex

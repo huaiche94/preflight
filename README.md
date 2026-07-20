@@ -253,7 +253,15 @@ observation. The per-turn point estimate sits last, labeled uncalibrated.
 
 ## Quick start
 
-Requires Go 1.26.5 (pinned in `go.mod`); no CGO, no external services.
+**Prerequisites**
+
+- **Go 1.26.5** (pinned in `go.mod`) to build — no CGO, no external
+  services.
+- **The coding agent you're instrumenting** — Claude Code and/or Codex
+  CLI — for the provider hooks below.
+- *Optional, for a persistent status line:* [**WezTerm**](https://wezterm.org)
+  (a status bar with **no tmux** — see
+  [`integrations/wezterm/`](integrations/wezterm/README.md)), or **tmux**.
 
 ```bash
 go build -o auspex ./cmd/auspex
